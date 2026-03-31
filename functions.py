@@ -85,13 +85,47 @@ def look_and_say():
         next_seq += str(count) + current[-1]
         current = next_seq
 
+# plus 2, plus 3, plus 4, plus 3, plus 2
+def plus_2_3_4_3_2():
+    i=0
+    increments = [2, 3, 4, 3, 2]
+    while True:
+        yield i
+        i += increments[i % len(increments)]
 
 
+# start at 11 increase by fibonacci numbers
+def fibonacci_starting_at_11():
+    fib = fibonacci()
+    current = 11
+    while True:
+        yield current
+        current += next(fib)
 
+
+# sum of prime numers squared
+# 2^2, 2^2*3^2, 2^2*3^2*5^2, 2^2*3^2*5^2*7^2
+def sum_of_prime_squares():
+    primes = prime_numbers()
+    current_sum = 1
+    while True:
+        prime = next(primes)
+        current_sum *= prime ** 2
+        yield current_sum
+
+# good one!
+# 2, 2^2*3, 2^2*3^2*5, 2^2*3^2*5^2*7, 2^2*3^2*5^2*7^2*11
+def sum_of_prime_squares_v2():
+    primes = prime_numbers()
+    current_product = 1
+    while True:
+        prime = next(primes)
+        current_product *= prime 
+        yield current_product
+        current_product *= prime
 
 if __name__ == "__main__":
-    # run times2_add3_every3digits generator
-    gen = look_and_say()
+    gen = sum_of_prime_squares_v2()
     for _ in range(10):
         print(next(gen))
 
