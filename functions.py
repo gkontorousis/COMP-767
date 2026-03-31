@@ -124,8 +124,40 @@ def sum_of_prime_squares_v2():
         yield current_product
         current_product *= prime
 
+
+# odd positoins: (2n)^2, even positions: 2n
+def odd_even_squares():
+    i = 1
+    while True:
+        if i % 2 == 1:
+            yield (2 * i) ** 2
+        else:
+            yield 2 * i
+        i += 1
+
+# mod3==0:(2n-1)^2-1, mod3==1: 2n^2-1, mod3==2: (2n+1)^2-1
+def hard_v1():
+    i = 1
+    while True:
+        if i % 3 == 0:
+            yield (2 * i - 1) ** 2 - 1
+        elif i % 3 == 1:
+            yield 2 * i ** 2 - 1 
+        else:
+            yield (2 * i + 1) ** 2 - 1
+        i += 1
+
+# 2n+look_and_say(n)
+def very_hard_v1():
+    look_and_say_gen = look_and_say()
+    i = 1
+    while True:
+        yield 2 * i + int(next(look_and_say_gen))
+        i += 1
+
+
 if __name__ == "__main__":
-    gen = sum_of_prime_squares_v2()
+    gen = very_hard_v1()
     for _ in range(10):
         print(next(gen))
 
