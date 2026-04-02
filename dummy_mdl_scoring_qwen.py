@@ -1,5 +1,4 @@
 import torch
-import math
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # =========================
@@ -12,27 +11,18 @@ def hard_v1():
         if i % 3 == 0:
             yield (2 * i - 1) ** 2 - 1
         elif i % 3 == 1:
-            yield 2 * i ** 2 - 1 
+            yield 2 * i ** 2 - 1
         else:
             yield (2 * i + 1) ** 2 - 1
         i += 1
 
 
 # =========================
-# Dataset
+# Sequence helper
 # =========================
 
 def take_n(gen, n):
     return [next(gen) for _ in range(n)]
-
-
-def build_dataset(seq, window=4):
-    examples = []
-    for i in range(len(seq) - window):
-        context = seq[i:i+window]
-        target = seq[i+window]
-        examples.append((context, target))
-    return examples
 
 
 # =========================
@@ -40,8 +30,11 @@ def build_dataset(seq, window=4):
 # =========================
 
 def continuation_nll(model, tokenizer, prefix, continuation, device):
-    prefix_ids = tokenizer(prefix, return_tensors="pt").input_ids.to(device)
-    full_ids = tokenizer(prefix + continuation, return_tensors="pt").input_ids.to(device)
+    """
+    Returns -log p(continuation | prefix)
+    """
+    prefix_ids = tokenizer(prefix, add_special_tokens=False, return_tensors="pt").input_ids.to(device)
+    full_ids = tokenizer(prefix + continuation, add_special_tokens=False, return_tensors="pt").input_ids.to(device)
 
     with torch.no_grad():
         outputs = model(full_ids)
@@ -51,38 +44,39 @@ def continuation_nll(model, tokenizer, prefix, continuation, device):
         token_log_probs = log_probs.gather(2, labels.unsqueeze(-1)).squeeze(-1)
 
     start = prefix_ids.shape[1] - 1
-    return -token_log_probs[:, start:].sum().item()
+    continuation_log_prob_sum = token_log_probs[:, start:].sum().item()
+    return -float(continuation_log_prob_sum)
 
 
-def score_z(model, tokenizer, z, device):
+def score_prior(model, tokenizer, z, device):
+    """
+    Prior loss: -log p(z)
+    """
     prior_prompt = "Write a short Python function that generates a sequence.\n\n"
     return continuation_nll(model, tokenizer, prior_prompt, z, device)
 
 
-def score_dataset(model, tokenizer, z, dataset, device):
-    total = 0.0
-
-    for context, target in dataset:
-        prefix = (
-            "Given this Python code:\n\n"
-            f"{z}\n\n"
-            f"Sequence: {', '.join(map(str, context))}\n"
-            "Next number:"
-        )
-
-        continuation = f" {target}"
-        total += continuation_nll(model, tokenizer, prefix, continuation, device)
-
-    return total
+def score_likelihood(model, tokenizer, z, sequence, device):
+    """
+    Likelihood loss: -log p(x | z)
+    where x is the whole observed sequence.
+    """
+    prefix = (
+        "Given this Python code:\n\n"
+        f"{z}\n\n"
+        "The sequence is: "
+    )
+    continuation = ", ".join(map(str, sequence))
+    return continuation_nll(model, tokenizer, prefix, continuation, device)
 
 
 # =========================
 # Explanations
 # =========================
 
-def build_dummy_explanation(train_seq):
+def build_dummy_explanation(sequence):
     return (
-        "vals = [" + ", ".join(map(str, train_seq)) + "]\n"
+        "vals = [" + ", ".join(map(str, sequence)) + "]\n"
         "def next_value(n):\n"
         "    return vals[n]\n"
     )
@@ -98,6 +92,19 @@ def build_concise_explanation():
         "    else:\n"
         "        return (2 * i + 1) ** 2 - 1\n"
     )
+
+
+# =========================
+# Printing
+# =========================
+
+def print_scores(name, prior_loss, likelihood_loss):
+    total_loss = prior_loss + likelihood_loss
+
+    print(f"\n=== {name} ===")
+    print(f"Prior loss (-log p(z)):        {prior_loss:.4f}")
+    print(f"Likelihood loss (-log p(x|z)): {likelihood_loss:.4f}")
+    print(f"Total loss:                    {total_loss:.4f}")
 
 
 # =========================
@@ -117,55 +124,39 @@ def main():
         device_map="auto" if torch.cuda.is_available() else None,
         trust_remote_code=True,
     )
+
     if not torch.cuda.is_available():
         model = model.to(device)
 
     model.eval()
 
-    # Generate sequence
+    # Generate one sequence
     gen = hard_v1()
-    seq = take_n(gen, 12)
+    seq = take_n(gen, 10)
 
-    # Split
-    train_seq = seq[:8]
-    test_seq = seq[8:]
-
-    train_data = build_dataset(train_seq)
-    test_data = build_dataset(seq)
-
-    print("Sequence:", seq)
+    print("Observed sequence:")
+    print(seq)
 
     # Build explanations
-    z_dummy = build_dummy_explanation(train_seq)
+    z_dummy = build_dummy_explanation(seq)
     z_concise = build_concise_explanation()
 
-    # Score dummy
-    dummy_z = score_z(model, tokenizer, z_dummy, device)
-    dummy_train = score_dataset(model, tokenizer, z_dummy, train_data, device)
-    dummy_test = score_dataset(model, tokenizer, z_dummy, test_data, device)
+    # Score dummy explanation
+    dummy_prior = score_prior(model, tokenizer, z_dummy, device)
+    dummy_likelihood = score_likelihood(model, tokenizer, z_dummy, seq, device)
 
-    # Score concise
-    concise_z = score_z(model, tokenizer, z_concise, device)
-    concise_train = score_dataset(model, tokenizer, z_concise, train_data, device)
-    concise_test = score_dataset(model, tokenizer, z_concise, test_data, device)
+    # Score concise explanation
+    concise_prior = score_prior(model, tokenizer, z_concise, device)
+    concise_likelihood = score_likelihood(model, tokenizer, z_concise, seq, device)
 
-    # Print
-    def print_scores(name, z, train, test, n_train, n_test):
-        map_loss = z + train
-        avg_train = train / max(n_train, 1)
-        avg_test = test / max(n_test, 1)
+    # Print results
+    print("\nDummy explanation:")
+    print(z_dummy)
+    print_scores("DUMMY", dummy_prior, dummy_likelihood)
 
-        print(f"\n=== {name} ===")
-        print(f"-log p(z):       {z:.2f}")
-        print(f"train NLL:       {train:.2f}")
-        print(f"test NLL:        {test:.2f}")
-        print(f"MDL score:       {map_loss:.2f}")
-        print(f"MAP loss:        {map_loss:.2f}")
-        print(f"avg train NLL:   {avg_train:.2f}")
-        print(f"avg test NLL:    {avg_test:.2f}")
-
-    print_scores("DUMMY", dummy_z, dummy_train, dummy_test, len(train_data), len(test_data))
-    print_scores("CONCISE", concise_z, concise_train, concise_test, len(train_data), len(test_data))
+    print("\nConcise explanation:")
+    print(z_concise)
+    print_scores("CONCISE", concise_prior, concise_likelihood)
 
 
 if __name__ == "__main__":
