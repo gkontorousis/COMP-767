@@ -49,7 +49,6 @@ This opens a browser → login with your institution / Digital Research Alliance
 
 Common endpoints:
 
-* `computecanada#beluga-dtn`
 * `computecanada#narval-dtn`
 * `computecanada#vulcan-dtn`
 * `computecanada#hpss`
@@ -83,7 +82,7 @@ globus endpoint start <LOCAL_ENDPOINT_ID>
 ```bash
 globus transfer \
 LOCAL_ENDPOINT_ID:/home/user/project \
-computecanada#beluga-dtn:/scratch/username/project \
+computecanada#narval-dtn:/scratch/username/project \
 --recursive
 ```
 
@@ -91,7 +90,7 @@ computecanada#beluga-dtn:/scratch/username/project \
 
 ```bash
 globus transfer \
-computecanada#beluga-dtn:/scratch/username/output \
+computecanada#narval-dtn:/scratch/username/output \
 LOCAL_ENDPOINT_ID:/home/user/output \
 --recursive
 ```

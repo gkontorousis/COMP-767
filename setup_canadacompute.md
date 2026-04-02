@@ -8,10 +8,10 @@
 4. Request access to systems:
 
    * Narval (GPU)
-   * Béluga (GPU/CPU)
+   * Narval (GPU/CPU)
    * Vulcan (GPU)
    * HPSS (storage)
-   * (Optional) Béluga Cloud (VMs)
+   * (Optional) Narval Cloud / Alliance Cloud (VMs)
 5. Wait for approval emails.
 
 ---
@@ -44,11 +44,6 @@ Add it to the Alliance portal → **CCDB → Manage SSH Keys**
 Create `~/.ssh/config`:
 
 ```bash
-Host beluga
-    HostName beluga.alliancecan.ca
-    User YOUR_USERNAME
-    IdentityFile ~/.ssh/id_ed25519
-
 Host narval
     HostName narval.alliancecan.ca
     User YOUR_USERNAME
@@ -63,7 +58,6 @@ Host vulcan
 Connect:
 
 ```bash
-ssh beluga
 ssh narval
 ssh vulcan
 ```
@@ -88,13 +82,13 @@ ssh vulcan
 Use `rsync` (recommended):
 
 ```bash
-rsync -av ./project/ username@beluga.alliancecan.ca:$SCRATCH/project/
+rsync -av ./project/ username@narval.alliancecan.ca:$SCRATCH/project/
 ```
 
 Download results:
 
 ```bash
-rsync -av username@beluga.alliancecan.ca:$SCRATCH/project/output/ ./output/
+rsync -av username@narval.alliancecan.ca:$SCRATCH/project/output/ ./output/
 ```
 
 For large datasets → use **Globus**. See [here](./using_globus.md)
@@ -172,7 +166,7 @@ git push
 rsync project -> cluster
 
 # Cluster
-ssh beluga
+ssh narval
 cd $SCRATCH/project
 sbatch train.slurm
 
@@ -203,10 +197,10 @@ rsync results -> local
 | System       | Use                |
 | ------------ | ------------------ |
 | Narval       | Large GPU jobs     |
-| Béluga       | General GPU jobs   |
+| Narval       | General GPU jobs   |
 | Vulcan       | Small GPU jobs     |
 | HPSS         | Long-term storage  |
-| Béluga Cloud | VM / hosting / dev |
+| Alliance Cloud | VM / hosting / dev |
 
 ---
 
