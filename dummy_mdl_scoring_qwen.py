@@ -135,6 +135,69 @@ def score_dataset_given_explanation(
     return total
 
 
+def format_example(ex: Example) -> str:
+    context_str = ", ".join(str(x) for x in ex.context)
+    return f"{ex.task_name}: [{context_str}] -> {ex.target}"
+
+
+def print_dataset_preview(train_set: Sequence[Example], test_set: Sequence[Example], n: int = 3) -> None:
+    print("\n=== Dataset Preview ===")
+    print(f"Train preview ({min(n, len(train_set))} examples):")
+    for ex in train_set[:n]:
+        print(f"  - {format_example(ex)}")
+    print(f"Test preview ({min(n, len(test_set))} examples):")
+    for ex in test_set[:n]:
+        print(f"  - {format_example(ex)}")
+
+
+def build_explanation_prompt(dataset: Sequence[Example], n: int = 6) -> str:
+    lines = [
+        "You are given integer-sequence continuation examples.",
+        "Write a short natural-language explanation of the rule family behind these examples.",
+        "Be concise and predictive. Return explanation text only.",
+        "",
+        "Examples:",
+    ]
+    for ex in dataset[:n]:
+        lines.append(f"- {format_example(ex)}")
+    lines.append("")
+    lines.append("Explanation:")
+    return "\n".join(lines)
+
+
+def generate_candidate_explanations(
+    model: AutoModelForCausalLM,
+    tokenizer: AutoTokenizer,
+    dataset: Sequence[Example],
+    device: torch.device,
+    num_candidates: int = 3,
+    prompt_examples: int = 6,
+    max_new_tokens: int = 80,
+    temperature: float = 0.9,
+    top_p: float = 0.95,
+) -> List[str]:
+    prompt = build_explanation_prompt(dataset, n=prompt_examples)
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
+    generated: List[str] = []
+
+    for _ in range(num_candidates):
+        with torch.no_grad():
+            output_ids = model.generate(
+                input_ids=input_ids,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=temperature,
+                top_p=top_p,
+                pad_token_id=tokenizer.eos_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+        continuation_ids = output_ids[0, input_ids.shape[1] :]
+        text = tokenizer.decode(continuation_ids, skip_special_tokens=True).strip()
+        if text:
+            generated.append(text.split("\n\n")[0].strip())
+    return generated
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dummy MDL scoring pipeline with Qwen on tiny synthetic data.")
     parser.add_argument(
@@ -154,6 +217,20 @@ def main() -> None:
         ),
         help="Dummy linguistic explanation z.",
     )
+    parser.add_argument("--preview_examples", type=int, default=4, help="Number of train/test examples to print.")
+    parser.add_argument(
+        "--num_generated_explanations",
+        type=int,
+        default=2,
+        help="How many model-generated explanation candidates to sample and score.",
+    )
+    parser.add_argument(
+        "--generation_prompt_examples",
+        type=int,
+        default=6,
+        help="How many training examples to include when prompting model for an explanation.",
+    )
+    parser.add_argument("--max_expl_tokens", type=int, default=80, help="Max tokens for each generated explanation.")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -171,6 +248,7 @@ def main() -> None:
     model.eval()
 
     train_set, test_set = build_tiny_dataset(points_per_task=args.points_per_task, window=args.window)
+    print_dataset_preview(train_set, test_set, n=args.preview_examples)
 
     z_complexity = score_explanation_complexity(model, tokenizer, args.explanation, device=device)
     train_data_complexity = score_dataset_given_explanation(model, tokenizer, args.explanation, train_set, device=device)
@@ -191,10 +269,36 @@ def main() -> None:
     print(f"-log p(z):                       {z_complexity:.4f}")
     print(f"-sum log p(x_train | z):        {train_data_complexity:.4f}")
     print(f"MDL train score (two-part):     {mdl_train:.4f}")
-    print(f"Avg train NLL per example:      {avg_train_nll:.4f}")
+    print(f"Avg train NLL per example:      { avg_train_nll:.4f}")
     print(f"Avg test NLL per example:       {avg_test_nll:.4f}")
     print(f"Approx train perplexity:        {ppl_train:.4f}")
     print(f"Approx test perplexity:         {ppl_test:.4f}")
+
+    if args.num_generated_explanations > 0:
+        print("\n=== Candidate Explanations From Model ===")
+        candidates = generate_candidate_explanations(
+            model=model,
+            tokenizer=tokenizer,
+            dataset=train_set,
+            device=device,
+            num_candidates=args.num_generated_explanations,
+            prompt_examples=args.generation_prompt_examples,
+            max_new_tokens=args.max_expl_tokens,
+        )
+
+        if not candidates:
+            print("No explanation candidates generated.")
+        for idx, cand in enumerate(candidates, start=1):
+            cand_z = score_explanation_complexity(model, tokenizer, cand, device=device)
+            cand_train = score_dataset_given_explanation(model, tokenizer, cand, train_set, device=device)
+            cand_test = score_dataset_given_explanation(model, tokenizer, cand, test_set, device=device)
+            cand_mdl = cand_z + cand_train
+            print(f"\n[{idx}] Explanation:")
+            print(cand)
+            print(f"    -log p(z):            {cand_z:.4f}")
+            print(f"    -sum log p(train|z):  {cand_train:.4f}")
+            print(f"    MDL train score:      {cand_mdl:.4f}")
+            print(f"    Avg test NLL/example: {cand_test / max(len(test_set), 1):.4f}")
 
 
 if __name__ == "__main__":
