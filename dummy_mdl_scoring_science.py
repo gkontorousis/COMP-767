@@ -162,40 +162,6 @@ SCIENCE_WORLD_TASK_FALSE = (
 
 
 # =========================
-# Model loading
-# =========================
-
-def load_model_and_tokenizer(model_name: str, cache_dir: str = "./hf_cache"):
-    """
-    Load model/tokenizer from the local cache if present; otherwise download and cache.
-    """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-
-    os.makedirs(cache_dir, exist_ok=True)
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        cache_dir=cache_dir,
-        trust_remote_code=True,
-    )
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        cache_dir=cache_dir,
-        dtype=dtype,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
-
-    if not torch.cuda.is_available():
-        model = model.to(device)
-
-    model.eval()
-    return model, tokenizer, device
-
-
-# =========================
 # Logprob scoring
 # =========================
 
@@ -299,12 +265,22 @@ def print_scores(name: str, prior_loss: float, likelihood_loss: float):
 
 def main():
     model_name = "Qwen/Qwen2.5-7B-Instruct"
-    cache_dir = "./hf_cache"
 
-    model, tokenizer, device = load_model_and_tokenizer(
-        model_name=model_name,
-        cache_dir=cache_dir,
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=dtype,
+        device_map="auto" if torch.cuda.is_available() else None,
+        trust_remote_code=True,
     )
+
+    if not torch.cuda.is_available():
+        model = model.to(device)
+
+    model.eval()
 
     observed_task, observed_rollout = split_task_and_rollout(SCIENCE_WORLD_TRACE)
 
