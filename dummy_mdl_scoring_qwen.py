@@ -7,7 +7,6 @@ import os
 # =========================
 
 def gen_fct():
-    i = 1
     i=0
     while True:
         yield 2**i - i
@@ -120,24 +119,14 @@ def print_scores(name, prior_loss, likelihood_loss):
 # =========================
 
 def main():
-
     model_name = "Qwen/Qwen2.5-7B-Instruct"
-    cache_dir = "./hf_cache"  # your local folder
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
-    # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        cache_dir=cache_dir,
-        trust_remote_code=True
-    )
-
-    # model
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        cache_dir=cache_dir,
         torch_dtype=dtype,
         device_map="auto" if torch.cuda.is_available() else None,
         trust_remote_code=True,
@@ -186,6 +175,6 @@ def main():
     print(z_false)
     print_scores("FALSE", false_prior, false_likelihood)
 
-
+    
 if __name__ == "__main__":
     main()
