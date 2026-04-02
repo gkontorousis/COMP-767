@@ -157,7 +157,7 @@ def very_hard_v1():
 
 
 if __name__ == "__main__":
-    gen = very_hard_v1()
+    gen = hard_v1()
     for _ in range(10):
         print(next(gen))
 
