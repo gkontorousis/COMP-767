@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import math
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -198,6 +198,13 @@ def generate_candidate_explanations(
     return generated
 
 
+def split_by_task(dataset: Sequence[Example]) -> Dict[str, List[Example]]:
+    grouped: Dict[str, List[Example]] = {}
+    for ex in dataset:
+        grouped.setdefault(ex.task_name, []).append(ex)
+    return grouped
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dummy MDL scoring pipeline with Qwen on tiny synthetic data.")
     parser.add_argument(
@@ -275,30 +282,42 @@ def main() -> None:
     print(f"Approx test perplexity:         {ppl_test:.4f}")
 
     if args.num_generated_explanations > 0:
-        print("\n=== Candidate Explanations From Model ===")
-        candidates = generate_candidate_explanations(
-            model=model,
-            tokenizer=tokenizer,
-            dataset=train_set,
-            device=device,
-            num_candidates=args.num_generated_explanations,
-            prompt_examples=args.generation_prompt_examples,
-            max_new_tokens=args.max_expl_tokens,
-        )
+        print("\n=== Candidate Explanations From Model (Per Task) ===")
+        train_by_task = split_by_task(train_set)
+        test_by_task = split_by_task(test_set)
 
-        if not candidates:
-            print("No explanation candidates generated.")
-        for idx, cand in enumerate(candidates, start=1):
-            cand_z = score_explanation_complexity(model, tokenizer, cand, device=device)
-            cand_train = score_dataset_given_explanation(model, tokenizer, cand, train_set, device=device)
-            cand_test = score_dataset_given_explanation(model, tokenizer, cand, test_set, device=device)
-            cand_mdl = cand_z + cand_train
-            print(f"\n[{idx}] Explanation:")
-            print(cand)
-            print(f"    -log p(z):            {cand_z:.4f}")
-            print(f"    -sum log p(train|z):  {cand_train:.4f}")
-            print(f"    MDL train score:      {cand_mdl:.4f}")
-            print(f"    Avg test NLL/example: {cand_test / max(len(test_set), 1):.4f}")
+        for task_name in sorted(train_by_task.keys()):
+            task_train = train_by_task[task_name]
+            task_test = test_by_task.get(task_name, [])
+
+            print(f"\n--- Task: {task_name} ---")
+            print(f"Train examples: {len(task_train)} | Test examples: {len(task_test)}")
+
+            candidates = generate_candidate_explanations(
+                model=model,
+                tokenizer=tokenizer,
+                dataset=task_train,
+                device=device,
+                num_candidates=args.num_generated_explanations,
+                prompt_examples=args.generation_prompt_examples,
+                max_new_tokens=args.max_expl_tokens,
+            )
+
+            if not candidates:
+                print("No explanation candidates generated.")
+                continue
+
+            for idx, cand in enumerate(candidates, start=1):
+                cand_z = score_explanation_complexity(model, tokenizer, cand, device=device)
+                cand_train = score_dataset_given_explanation(model, tokenizer, cand, task_train, device=device)
+                cand_test = score_dataset_given_explanation(model, tokenizer, cand, task_test, device=device)
+                cand_mdl = cand_z + cand_train
+                print(f"\n[{idx}] Explanation:")
+                print(cand)
+                print(f"    -log p(z):            {cand_z:.4f}")
+                print(f"    -sum log p(train|z):  {cand_train:.4f}")
+                print(f"    MDL train score:      {cand_mdl:.4f}")
+                print(f"    Avg test NLL/example: {cand_test / max(len(task_test), 1):.4f}")
 
 
 if __name__ == "__main__":
