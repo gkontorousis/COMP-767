@@ -1,5 +1,6 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import os
 
 # =========================
 # Your generator
@@ -7,26 +8,17 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 def gen_fct():
     i = 1
+    i=0
     while True:
-        if i % 3 == 0:
-            yield (2 * i - 1) ** 2 - 1
-        elif i % 3 == 1:
-            yield 2 * i ** 2 - 1
-        else:
-            yield (2 * i + 1) ** 2 - 1
-        i += 1
+        yield 2**i - i
+        i+=1
 
 text = """
-def gen_sequence():\n
-    i = 1\n
-    while True:\n
-        if i % 3 == 0:\n
-            yield (2 * i - 1) ** 2 - 1\n
-        elif i % 3 == 1:\n
-            yield 2 * i ** 2 - 1\n
-        else:\n
-            yield (2 * i + 1) ** 2 - 1\n
-        i += 1\n
+def gen_sequence():
+    i=0
+    while True:
+        yield 2**i - i
+        i+=1
 """
 
 # =========================
@@ -128,14 +120,24 @@ def print_scores(name, prior_loss, likelihood_loss):
 # =========================
 
 def main():
+
     model_name = "Qwen/Qwen2.5-7B-Instruct"
+    cache_dir = "./hf_cache"  # your local folder
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    # tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        cache_dir=cache_dir,
+        trust_remote_code=True
+    )
+
+    # model
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
+        cache_dir=cache_dir,
         torch_dtype=dtype,
         device_map="auto" if torch.cuda.is_available() else None,
         trust_remote_code=True,
@@ -184,6 +186,6 @@ def main():
     print(z_false)
     print_scores("FALSE", false_prior, false_likelihood)
 
-    
+
 if __name__ == "__main__":
     main()
