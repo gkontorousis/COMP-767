@@ -5,7 +5,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Your generator
 # =========================
 
-def hard_v1():
+def gen_fct():
     i = 1
     while True:
         if i % 3 == 0:
@@ -16,6 +16,18 @@ def hard_v1():
             yield (2 * i + 1) ** 2 - 1
         i += 1
 
+text = """
+def gen_sequence():\n
+    i = 1\n
+    while True:\n
+        if i % 3 == 0:\n
+            yield (2 * i - 1) ** 2 - 1\n
+        elif i % 3 == 1:\n
+            yield 2 * i ** 2 - 1\n
+        else:\n
+            yield (2 * i + 1) ** 2 - 1\n
+        i += 1\n
+"""
 
 # =========================
 # Sequence helper
@@ -77,7 +89,7 @@ def score_likelihood(model, tokenizer, z, sequence, device):
 def build_dummy_explanation(sequence):
     return (
         "vals = [" + ", ".join(map(str, sequence)) + "]\n"
-        "def gen_sequence(i):\n"
+        "def gen_sequence():\n"
         "   i=0\n"
         "   while True:\n"
         "       yield vals[i]\n"
@@ -86,19 +98,17 @@ def build_dummy_explanation(sequence):
 
 
 def build_concise_explanation():
-    return (
-        "def gen_sequence(i):\n"
-        "   i = 1\n"
-        "   while True:\n"
-        "       if i % 3 == 0:\n"
-        "           yield (2 * i - 1) ** 2 - 1\n"
-        "       elif i % 3 == 1:\n"
-        "           yield 2 * i ** 2 - 1\n"
-        "       else:\n"
-        "           yield (2 * i + 1) ** 2 - 1\n"
-        "       i += 1\n"
-    )
+    return text.strip()
 
+
+def build_false_explanation():
+    return (
+        "def fib():\n"
+        "    a, b = 0, 1\n"
+        "    while True:\n"
+        "        yield a\n"
+        "        a, b = b, a + b\n"
+    )
 
 # =========================
 # Printing
@@ -137,7 +147,7 @@ def main():
     model.eval()
 
     # Generate one sequence
-    gen = hard_v1()
+    gen = gen_fct()
     seq = take_n(gen, 10)
 
     print("Observed sequence:")
@@ -146,6 +156,7 @@ def main():
     # Build explanations
     z_dummy = build_dummy_explanation(seq)
     z_concise = build_concise_explanation()
+    z_false = build_false_explanation()
 
     # Score dummy explanation
     dummy_prior = score_prior(model, tokenizer, z_dummy, device)
@@ -154,6 +165,11 @@ def main():
     # Score concise explanation
     concise_prior = score_prior(model, tokenizer, z_concise, device)
     concise_likelihood = score_likelihood(model, tokenizer, z_concise, seq, device)
+
+
+    # score for false explanation (e.g., "def fib(): ...")
+    false_prior = score_prior(model, tokenizer, z_false, device)
+    false_likelihood = score_likelihood(model, tokenizer, z_false, seq, device)
 
     # Print results
     print("\nDummy explanation:")
@@ -164,6 +180,10 @@ def main():
     print(z_concise)
     print_scores("CONCISE", concise_prior, concise_likelihood)
 
+    print("\nFalse explanation:")
+    print(z_false)
+    print_scores("FALSE", false_prior, false_likelihood)
 
+    
 if __name__ == "__main__":
     main()
