@@ -1,10 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=dummy-test
 #SBATCH --account=def-sreddy
-#SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
+#SBATCH --mem=8192M
 #SBATCH --time=00:05:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
