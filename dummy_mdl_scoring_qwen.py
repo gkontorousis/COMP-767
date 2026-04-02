@@ -64,7 +64,7 @@ def score_likelihood(model, tokenizer, z, sequence, device):
     prefix = (
         "Given this Python code:\n\n"
         f"{z}\n\n"
-        "The sequence is: "
+        "Output the first 10 values, comma-separated:\n"
     )
     continuation = ", ".join(map(str, sequence))
     return continuation_nll(model, tokenizer, prefix, continuation, device)
@@ -77,20 +77,26 @@ def score_likelihood(model, tokenizer, z, sequence, device):
 def build_dummy_explanation(sequence):
     return (
         "vals = [" + ", ".join(map(str, sequence)) + "]\n"
-        "def next_value(n):\n"
-        "    return vals[n]\n"
+        "def gen_sequence(i):\n"
+        "   i=0\n"
+        "   while True:\n"
+        "       yield vals[i]\n"
+        "       i += 1\n"
     )
 
 
 def build_concise_explanation():
     return (
-        "def next_value(i):\n"
-        "    if i % 3 == 0:\n"
-        "        return (2 * i - 1) ** 2 - 1\n"
-        "    elif i % 3 == 1:\n"
-        "        return 2 * i ** 2 - 1\n"
-        "    else:\n"
-        "        return (2 * i + 1) ** 2 - 1\n"
+        "def gen_sequence(i):\n"
+        "   i = 1\n"
+        "   while True:\n"
+        "       if i % 3 == 0:\n"
+        "           yield (2 * i - 1) ** 2 - 1\n"
+        "       elif i % 3 == 1:\n"
+        "           yield 2 * i ** 2 - 1\n"
+        "       else:\n"
+        "           yield (2 * i + 1) ** 2 - 1\n"
+        "       i += 1\n"
     )
 
 
