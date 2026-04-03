@@ -1,0 +1,175 @@
+% COMP-767 final paper — skeleton from project proposal
+% Compile: pdflatex + bibtex (or biblatex) as needed
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+% \usepackage{graphicx} % uncomment when adding figures (requires grfext etc. in your TeX install)
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[numbers,sort&compress]{natbib}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\title{Linguistic MDL Explanations with LLMs via Occam-Style Prompt Discovery}
+
+\author{%
+  Yassine Meliani$^1$ \quad George Kontorousis$^1$ \quad Eric Elmoznino$^2$\\[0.5em]
+  \small
+  $^1$Department of Computer Science, McGill University, Montreal, Canada\\
+  $^2$Mila Quebec\\[0.25em]
+  \small
+  Correspondence: \href{mailto:yassine.meliani@mail.mcgill.ca}{yassine.meliani@mail.mcgill.ca},
+  \href{mailto:george.kontorousis@mail.mcgill.ca}{george.kontorousis@mail.mcgill.ca},
+  \href{mailto:eric.elmoznino@mila.quebec}{eric.elmoznino@mila.quebec}
+}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% TODO: Revise after experiments — keep aligned with final results.
+Prompted large language models (LLMs) behave like universal function approximators: the prompt acts as natural-language ``parameters'' governing conditional predictions. We frame linguistic explanations as hypotheses about data and apply the Minimum Description Length (MDL) principle using frozen LLM likelihoods. A trainable policy $p_\theta(z \mid x)$ proposes an explanation $z$ for dataset $x$; a frozen evaluator $p^\star$ scores $z$ with a two-part code: explanation complexity $-\log p^\star(z)$ and data complexity $-\log p^\star(x \mid z)$ (with token masking for prediction targets). We optimize $p_\theta$ with reinforcement learning to discover concise, predictive explanations and compare to in-context learning and Monte Carlo hypothesis search. % TODO: Summarize key empirical findings (compression, generalization, interpretability).
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+% Motivation: prompts as models; heuristic explanation vs.\ principled simplicity + fit.
+% Occam / MDL; Bayesian view as maximizing $p^\star(z \mid x)$.
+% High-level method: policy $p_\theta$, frozen $p^\star$, RL on MDL reward.
+% Contributions (enumerate explicitly).
+
+\section{Related Work}
+\label{sec:related}
+
+See, e.g., \citet{petrov2024} on prompt-conditioned behavior; RL approaches to prompts \citep{hu2023}; Monte Carlo hypothesis search in textual environments \citep{levy2025}; and dataset-centric automated discovery \citep{autodiscovery2025}.
+% Expand: MDL / description length; other explanation / interpretability lines.
+% MDL, Occam, description length in ML.
+% RL for prompt optimization; Monte Carlo hypothesis search (e.g., Levy-style environments).
+% Automated modeling / AutoDiscovery-style work.
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Problem setting}
+\label{sec:problem}
+
+% Dataset $x$, mask $m$ over tokens for likelihood of targets (labels, next observation, etc.).
+
+\subsection{MDL objective and reward}
+\label{sec:mdl}
+
+Let $x$ denote a dataset (rendered as text), $z$ a proposed linguistic explanation, and $m$ a mask over tokens that count toward the predictive likelihood (e.g., labels or next-observation fields). With a frozen evaluator LM $p^\star$, we define the reward
+\begin{equation}
+  R(z, x, m; p^\star) = -\log p^\star(z) - \log p^\star(x \mid z),
+  \label{eq:mdl-reward}
+\end{equation}
+The first term penalizes explanation complexity under $p^\star$; the second penalizes poor prediction of $x$ given $z$, evaluated only on tokens selected by the mask $m$.
+% TODO: Clarify exact factorization / conditional used in implementation (which spans are conditioned on).
+
+\subsection{Explanation policy and training}
+\label{sec:policy}
+
+% Policy $p_\theta(z \mid x)$: architecture, fine-tuning base model, prompt template for embedding $x$.
+% RL algorithm (e.g., PPO / REINFORCE), variance reduction, baselines.
+% Why frozen $p^\star$ mitigates reward hacking.
+
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Datasets}
+\label{sec:datasets}
+
+\paragraph{Toy textual environment.}
+% Levy-style textual observations / transitions; mask on ``next observation'' (or equivalent) span.
+
+\paragraph{Natural-language or IO-pair benchmarks.}
+% Subset of AutoDiscovery-style datasets; mask on output span for supervised-style formatting.
+
+\paragraph{Synthetic rules (optional).}
+% Parity, modular arithmetic, string transforms — sanity checks for rule recovery.
+
+\subsection{Baselines}
+\label{sec:baselines}
+
+\begin{enumerate}
+  \item \textbf{RL-MDL (ours):} policy $p_\theta(z \mid x)$ trained to maximize~\eqref{eq:mdl-reward}.
+  \item \textbf{In-context learning (ICL):} no explicit $z$; predictions from training examples in context.
+  \item \textbf{Monte Carlo search:} sample or search candidate $z$; select by same MDL score without learned policy.
+\end{enumerate}
+
+\subsection{Metrics}
+\label{sec:metrics}
+
+\paragraph{Training-set compression.}
+For explanation-based methods (ours and search),
+\begin{equation}
+  -\log p^\star(z) - \sum_{i=1}^{N} \log p^\star(x_i \mid z).
+  \label{eq:compression-two-part}
+\end{equation}
+For ICL, an online one-part code,
+\begin{equation}
+  -\log p^\star(x_1) - \sum_{i=1}^{N-1} \log p^\star(x_{i+1} \mid x_{1:i}).
+  \label{eq:compression-icl}
+\end{equation}
+
+\paragraph{Generalization.}
+For held-out $x' = (x'_1, \ldots, x'_M)$, explanation-based methods report
+\begin{equation}
+  \sum_{i=1}^{M} -\log p^\star(x'_i \mid z),
+\end{equation}
+and ICL reports $\sum_{i=1}^{M} -\log p^\star(x'_i \mid x)$.
+
+\paragraph{Interpretability proxies.}
+% Token length $|z|$; optional human study.
+
+\subsection{Implementation details}
+\label{sec:impl}
+
+% Models ($p^\theta$, $p^\star$), hyperparameters, compute, seeds, training steps.
+
+\section{Results}
+\label{sec:results}
+
+% Tables/figures: compression, generalization, $|z|$.
+% Ablations if any (mask design, reward components, search budget vs.\ policy).
+
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+% Failure modes, scalability, dependence on $p^\star$, ethical / misuse notes if relevant.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+% Restate contributions and outcomes; brief future work.
+
+\section*{Acknowledgments}
+% TODO: Funding, compute, colleagues.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+% Create project_paper/references.bib and cite keys here, or replace with \begin{thebibliography}...
+
+\appendix
+
+\section{Additional experimental details}
+\label{app:details}
+
+% Extended hyperparameters, prompts, dataset formatting examples.
+
+\section{Extended results}
+\label{app:results}
+
+% Extra plots, per-dataset breakdowns, qualitative explanation samples.
+
+\end{document}
