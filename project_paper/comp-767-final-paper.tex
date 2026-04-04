@@ -1,43 +1,73 @@
-% COMP-767 final paper — skeleton from project proposal
-% Compile: pdflatex + bibtex (or biblatex) as needed
+% COMP-767 final paper — ICML 2026 format
+% Requires: icml2026.sty, icml2026.bst, fancyhdr.sty (from official ICML author kit in this directory)
+% Compile: pdflatex -> bibtex -> pdflatex x2
 
-\documentclass[11pt]{article}
+\documentclass{article}
 
-\usepackage[margin=1in]{geometry}
-\usepackage{amsmath,amssymb}
-% \usepackage{graphicx} % uncomment when adding figures (requires grfext etc. in your TeX install)
+\usepackage{microtype}
+\usepackage{graphicx}
+% \usepackage{subcaption} % ICML recommends for subfigures; install caption bundle if needed
 \usepackage{booktabs}
+
 \usepackage{hyperref}
-\usepackage[numbers,sort&compress]{natbib}
 
-\hypersetup{
-  colorlinks=true,
-  linkcolor=blue,
-  citecolor=blue,
-  urlcolor=blue
-}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
 
-\title{Linguistic MDL Explanations with LLMs via Occam-Style Prompt Discovery}
+% Blind submission (default). For preprint: \usepackage[preprint]{icml2026}
+% Camera-ready: \usepackage[accepted]{icml2026}
+\usepackage{icml2026}
 
-\author{%
-  Yassine Meliani$^1$ \quad George Kontorousis$^1$ \quad Eric Elmoznino$^2$\\[0.5em]
-  \small
-  $^1$Department of Computer Science, McGill University, Montreal, Canada\\
-  $^2$Mila Quebec\\[0.25em]
-  \small
-  Correspondence: \href{mailto:yassine.meliani@mail.mcgill.ca}{yassine.meliani@mail.mcgill.ca},
-  \href{mailto:george.kontorousis@mail.mcgill.ca}{george.kontorousis@mail.mcgill.ca},
-  \href{mailto:eric.elmoznino@mila.quebec}{eric.elmoznino@mila.quebec}
-}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+% Optional (ICML example): \usepackage{mathtools}
+% Load after hyperref/amsmath: \usepackage[capitalize,noabbrev]{cleveref}
 
-\date{\today}
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\icmltitlerunning{Linguistic MDL Explanations via Occam-Style Prompt Discovery}
 
 \begin{document}
-\maketitle
+
+\twocolumn[
+  \icmltitle{Linguistic MDL Explanations with LLMs via Occam-Style Prompt Discovery}
+
+  \begin{icmlauthorlist}
+    \icmlauthor{Yassine Meliani}{mcgill}
+    \icmlauthor{George Kontorousis}{mcgill}
+    \icmlauthor{Eric Elmoznino}{mila}
+  \end{icmlauthorlist}
+
+  \icmlaffiliation{mcgill}{Department of Computer Science, McGill University, Montreal, QC, Canada}
+  \icmlaffiliation{mila}{Mila Quebec, Montreal, QC, Canada}
+
+  \icmlcorrespondingauthor{Yassine Meliani}{yassine.meliani@mail.mcgill.ca}
+  \icmlcorrespondingauthor{George Kontorousis}{george.kontorousis@mail.mcgill.ca}
+  \icmlcorrespondingauthor{Eric Elmoznino}{eric.elmoznino@mila.quebec}
+
+  \icmlkeywords{Minimum description length, large language models, interpretability, reinforcement learning, prompt discovery}
+
+  \vskip 0.3in
+]
+
+\printAffiliationsAndNotice{}
 
 \begin{abstract}
-% TODO: Revise after experiments — keep aligned with final results.
-Prompted large language models (LLMs) behave like universal function approximators: the prompt acts as natural-language ``parameters'' governing conditional predictions. We frame linguistic explanations as hypotheses about data and apply the Minimum Description Length (MDL) principle using frozen LLM likelihoods. A trainable policy $p_\theta(z \mid x)$ proposes an explanation $z$ for dataset $x$; a frozen evaluator $p^\star$ scores $z$ with a two-part code: explanation complexity $-\log p^\star(z)$ and data complexity $-\log p^\star(x \mid z)$ (with token masking for prediction targets). We optimize $p_\theta$ with reinforcement learning to discover concise, predictive explanations and compare to in-context learning and Monte Carlo hypothesis search. % TODO: Summarize key empirical findings (compression, generalization, interpretability).
+  % TODO: Revise after experiments — keep aligned with final results.
+  Prompted large language models (LLMs) behave like universal function approximators: the prompt acts as natural-language ``parameters'' governing conditional predictions.
+  We frame linguistic explanations as hypotheses about data and apply the Minimum Description Length (MDL) principle using frozen LLM likelihoods.
+  A trainable policy $p_\theta(z \mid x)$ proposes an explanation $z$ for dataset $x$; a frozen evaluator $p^\star$ scores $z$ with a two-part code: explanation complexity $-\log p^\star(z)$ and data complexity $-\log p^\star(x \mid z)$ (with token masking for prediction targets).
+  We optimize $p_\theta$ with reinforcement learning to discover concise, predictive explanations and compare to in-context learning and Monte Carlo hypothesis search.
+  % TODO: Summarize key empirical findings (compression, generalization, interpretability).
 \end{abstract}
 
 \section{Introduction}
@@ -53,9 +83,6 @@ Prompted large language models (LLMs) behave like universal function approximato
 
 See, e.g., \citet{petrov2024} on prompt-conditioned behavior; RL approaches to prompts \citep{hu2023}; Monte Carlo hypothesis search in textual environments \citep{levy2025}; and dataset-centric automated discovery \citep{autodiscovery2025}.
 % Expand: MDL / description length; other explanation / interpretability lines.
-% MDL, Occam, description length in ML.
-% RL for prompt optimization; Monte Carlo hypothesis search (e.g., Levy-style environments).
-% Automated modeling / AutoDiscovery-style work.
 
 \section{Method}
 \label{sec:method}
@@ -68,7 +95,8 @@ See, e.g., \citet{petrov2024} on prompt-conditioned behavior; RL approaches to p
 \subsection{MDL objective and reward}
 \label{sec:mdl}
 
-Let $x$ denote a dataset (rendered as text), $z$ a proposed linguistic explanation, and $m$ a mask over tokens that count toward the predictive likelihood (e.g., labels or next-observation fields). With a frozen evaluator LM $p^\star$, we define the reward
+Let $x$ denote a dataset (rendered as text), $z$ a proposed linguistic explanation, and $m$ a mask over tokens that count toward the predictive likelihood (e.g., labels or next-observation fields).
+With a frozen evaluator LM $p^\star$, we define the reward
 \begin{equation}
   R(z, x, m; p^\star) = -\log p^\star(z) - \log p^\star(x \mid z),
   \label{eq:mdl-reward}
@@ -153,14 +181,27 @@ and ICL reports $\sum_{i=1}^{M} -\log p^\star(x'_i \mid x)$.
 
 % Restate contributions and outcomes; brief future work.
 
+\section*{Accessibility}
+Authors will follow ICML accessibility guidance for the camera-ready version as applicable.
+
+\section*{Software and Data}
+If accepted, we plan to release code and data references via anonymized supplementary material during review where appropriate, and public URLs in the camera-ready version.
+
+% Acknowledgements only in accepted / camera-ready; text suppressed under blind review by ICML style.
 \section*{Acknowledgments}
-% TODO: Funding, compute, colleagues.
+\textbf{Do not} include acknowledgements in the initial version submitted for blind review.
+% TODO: Funding, compute, colleagues (camera-ready).
 
-\bibliographystyle{plainnat}
+\section*{Impact Statement}
+This paper presents work whose goal is to advance the field of Machine Learning.
+There are many potential societal consequences of automated explanation discovery with LLMs, including misuse for generating plausible but incorrect rationales; we encourage careful human oversight in high-stakes settings and will expand this discussion in the camera-ready version as appropriate.
+
 \bibliography{references}
-% Create project_paper/references.bib and cite keys here, or replace with \begin{thebibliography}...
+\bibliographystyle{icml2026}
 
+\newpage
 \appendix
+\onecolumn
 
 \section{Additional experimental details}
 \label{app:details}
