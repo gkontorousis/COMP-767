@@ -55,7 +55,7 @@ def score_prior(model, tokenizer, z, device):
     """
     Prior loss: -log p(z)
     """
-    prior_prompt = "Write a short Python function that generates a sequence.\n\n"
+    prior_prompt = "Write a Python generator style function that generates a number sequence following a specific rule.\n\n"
     return continuation_nll(model, tokenizer, prior_prompt, z, device)
 
 
@@ -119,7 +119,7 @@ def print_scores(name, prior_loss, likelihood_loss):
 # =========================
 
 def main():
-    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    model_name = "Qwen/Qwen2.5-7B"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
