@@ -1,23 +1,26 @@
+import copy
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, TaskType, get_peft_model
 
 
 # =========================
 # Config
 # =========================
 
-MODEL_NAME = "Qwen/Qwen2.5-7B"
-MAX_NEW_TOKENS = 128
-TEMPERATURE = 1.0
-LR = 1e-6
+MODEL_NAME = "Qwen/Qwen2.5-0.5B"
+MAX_NEW_TOKENS = 96
+TEMPERATURE = 0.8
+LR = 5e-4
 LAMBDA_PRIOR = 1.0
 SEED = 42
 
+# LoRA config
+LORA_R = 8
+LORA_ALPHA = 16
+LORA_DROPOUT = 0.05
 
-# =========================
-# Prompt / data
-# =========================
-
+# One toy prompt / episode
 OBSERVED_SEQUENCE = [1, 1, 2, 5, 12, 27, 58, 121, 248, 503]
 
 PROMPT = """You are given a number sequence.
@@ -42,7 +45,7 @@ def set_seed(seed: int):
 
 def build_prior_prefix() -> str:
     return (
-        "Write a Python generator style function that generates a number sequence following a specific rule.\n\n"
+        "Write a concise Python generator function for a numerical sequence.\n\n"
         "Code:\n"
     )
 
@@ -82,19 +85,11 @@ def continuation_logprob(model, tokenizer, prefix: str, continuation: str, devic
     return token_log_probs[:, start:].sum()
 
 
-def continuation_nll(model, tokenizer, prefix: str, continuation: str, device) -> float:
+def compute_reward(eval_model, tokenizer, z: str, observed_sequence, lam: float, device):
     """
-    Returns -log p(continuation | prefix) as a float.
-    """
-    with torch.no_grad():
-        return -float(continuation_logprob(model, tokenizer, prefix, continuation, device).item())
-
-
-def compute_reward(eval_model, tokenizer, z: str, observed_sequence, lam : float, device):
-    """
-    Reward = -J = lambda * log p(z) + log p(x | z)
+    Reward = -J = lam * log p(z) + log p(x | z)
     where:
-      J = -lambda * log p(z) - log p(x|z)
+      J = -lam log p(z) - log p(x|z)
     """
     seq_text = ", ".join(map(str, observed_sequence))
 
@@ -135,13 +130,14 @@ def sample_from_policy(model, tokenizer, prompt: str, device, max_new_tokens: in
         return_tensors="pt",
     ).to(device)
 
-    generated = model.generate(
-        **inputs,
-        do_sample=True,
-        temperature=temperature,
-        max_new_tokens=max_new_tokens,
-        pad_token_id=tokenizer.eos_token_id,
-    )
+    with torch.no_grad():
+        generated = model.generate(
+            **inputs,
+            do_sample=True,
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+            pad_token_id=tokenizer.eos_token_id,
+        )
 
     prompt_len = inputs["input_ids"].shape[1]
     sampled_ids = generated[:, prompt_len:]
@@ -164,12 +160,13 @@ def greedy_from_policy(model, tokenizer, prompt: str, device, max_new_tokens: in
         return_tensors="pt",
     ).to(device)
 
-    generated = model.generate(
-        **inputs,
-        do_sample=False,
-        max_new_tokens=max_new_tokens,
-        pad_token_id=tokenizer.eos_token_id,
-    )
+    with torch.no_grad():
+        generated = model.generate(
+            **inputs,
+            do_sample=False,
+            max_new_tokens=max_new_tokens,
+            pad_token_id=tokenizer.eos_token_id,
+        )
 
     prompt_len = inputs["input_ids"].shape[1]
     gen_ids = generated[:, prompt_len:]
@@ -195,6 +192,72 @@ def policy_logprob_of_sample(policy_model, prompt_ids: torch.Tensor, sampled_ids
     return token_log_probs[:, start:].sum()
 
 
+def build_policy_model(model_name: str, dtype, device):
+    """
+    Load a base model and wrap it with LoRA adapters.
+    Only LoRA weights are trainable.
+    """
+    base = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=dtype,
+        device_map=None,
+        trust_remote_code=True,
+    ).to(device)
+
+    lora_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        r=LORA_R,
+        lora_alpha=LORA_ALPHA,
+        lora_dropout=LORA_DROPOUT,
+        bias="none",
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+    )
+
+    model = get_peft_model(base, lora_config)
+    model.train()
+    return model
+
+
+def build_frozen_eval_model(model_name: str, dtype, device):
+    """
+    Frozen base evaluator model.
+    """
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=dtype,
+        device_map=None,
+        trust_remote_code=True,
+    ).to(device)
+
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad = False
+
+    return model
+
+
+def print_trainable_parameters(model):
+    trainable = 0
+    total = 0
+    for p in model.parameters():
+        total += p.numel()
+        if p.requires_grad:
+            trainable += p.numel()
+
+    pct = 100.0 * trainable / max(total, 1)
+    print(f"Trainable params: {trainable:,}")
+    print(f"Total params:     {total:,}")
+    print(f"Trainable %:      {pct:.4f}%")
+
+
 # =========================
 # Main
 # =========================
@@ -209,31 +272,17 @@ def main():
     print(f"Loading tokenizer: {MODEL_NAME}")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
 
-    print(f"Loading trainable policy model: {MODEL_NAME}")
-    policy_model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype=dtype,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
-    if not torch.cuda.is_available():
-        policy_model = policy_model.to(device)
-    policy_model.train()
+    print(f"\nLoading trainable LoRA policy model: {MODEL_NAME}")
+    policy_model = build_policy_model(MODEL_NAME, dtype, device)
+    print_trainable_parameters(policy_model)
 
-    print(f"Loading frozen evaluator model: {MODEL_NAME}")
-    eval_model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype=dtype,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
-    if not torch.cuda.is_available():
-        eval_model = eval_model.to(device)
-    eval_model.eval()
-    for p in eval_model.parameters():
-        p.requires_grad = False
+    print(f"\nLoading frozen evaluator model: {MODEL_NAME}")
+    eval_model = build_frozen_eval_model(MODEL_NAME, dtype, device)
 
-    optimizer = torch.optim.AdamW(policy_model.parameters(), lr=LR)
+    optimizer = torch.optim.AdamW(
+        [p for p in policy_model.parameters() if p.requires_grad],
+        lr=LR,
+    )
 
     print("\n=== Prompt ===")
     print(PROMPT)
@@ -285,12 +334,12 @@ def main():
     print(f"Prior loss (-log p(z)):        {reward_info['prior_nll']:.4f}")
     print(f"Likelihood loss (-log p(x|z)): {reward_info['likelihood_nll']:.4f}")
     print(f"Total objective J:             {reward_info['total_objective']:.4f}")
-    print(f"Reward = -J:                  {float(reward.item()):.4f}")
+    print(f"Reward = -J:                   {float(reward.item()):.4f}")
 
     print("\n=== REINFORCE terms ===")
-    print(f"Policy logprob:               {float(logprob.item()):.4f}")
-    print(f"Advantage:                    {float(advantage.item()):.4f}")
-    print(f"Policy loss:                  {float(policy_loss.item()):.4f}")
+    print(f"Policy logprob:                {float(logprob.item()):.4f}")
+    print(f"Advantage:                     {float(advantage.item()):.4f}")
+    print(f"Policy loss:                   {float(policy_loss.item()):.4f}")
 
     optimizer.zero_grad()
     policy_loss.backward()
@@ -300,7 +349,7 @@ def main():
         if p.grad is not None:
             grad_norm_sq += p.grad.detach().float().pow(2).sum().item()
     grad_norm = grad_norm_sq ** 0.5
-    print(f"Gradient norm:                {grad_norm:.4f}")
+    print(f"Gradient norm:                 {grad_norm:.4f}")
 
     optimizer.step()
 
