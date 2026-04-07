@@ -22,8 +22,11 @@ def continuation_nll_and_token_count(model, tokenizer, prefix: str, continuation
 
     with torch.no_grad():
         outputs = model(full_ids)
-        logits = outputs.logits[:, :-1, :]
+
+        # Cast to float32 before log_softmax for more stable scoring.
+        logits = outputs.logits[:, :-1, :].float()
         labels = full_ids[:, 1:]
+
         log_probs = torch.log_softmax(logits, dim=-1)
         token_log_probs = log_probs.gather(2, labels.unsqueeze(-1)).squeeze(-1)
 
@@ -34,59 +37,47 @@ def continuation_nll_and_token_count(model, tokenizer, prefix: str, continuation
     return -float(continuation_log_prob_sum), int(continuation_token_count)
 
 
-def qwen_render_messages(tokenizer, messages, add_generation_prompt: bool) -> str:
+def build_prior_prefix() -> str:
     """
-    Render chat messages using Qwen's chat template.
+    Plain-text prefix for the base model prior over explanations.
     """
-    return tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=add_generation_prompt,
-    )
-
-
-def build_prior_system_prompt() -> str:
     return (
-        "You generate concise but meaningful task descriptions for a ScienceWorld-style agent. "
-        "A good task description should specify a realistic household or science-oriented goal "
-        "that could be completed through a sequence of text actions."
+        "Below is a concise explanation of the task or pattern in the data.\n\n"
+        "Explanation:\n"
     )
 
 
-def build_action_scoring_system_prompt(task_description: str) -> str:
+def build_action_likelihood_prefix(task_description: str) -> str:
+    """
+    Plain-text prefix for scoring an action sequence under a candidate task.
+    """
     return (
-        "You are a ScienceWorld agent.\n\n"
-        f"Task Description: {task_description}\n\n"
-        "You must produce a plausible sequence of actions for completing the task.\n"
-        "Only actions are shown here; environment observations are omitted.\n"
-        "Even without observations, the action sequence should still be coherent and strongly related to the task.\n\n"
-        "Important formatting rules:\n"
-        '- Each line must be exactly one action.\n'
-        '- Every action must begin with the characters "> ".\n'
-        "- Do not explain anything.\n"
-        "- Do not include observations.\n"
-        "- Do not include commentary, numbering, or bullets.\n"
-        "- Stay faithful to the task.\n\n"
-        "A high-probability action sequence should involve tools, objects, locations, and operations "
-        "that are genuinely useful for the stated task."
+        "ScienceWorld task description:\n"
+        f"{task_description}\n\n"
+        "Below is a sequence of actions that an agent might take to solve the task.\n"
+        "The sequence should be specifically relevant to the task, not just a generic household routine.\n"
+        "Each line is one action and begins with '> '.\n\n"
+        "Action sequence:\n"
     )
 
 
-def score_prior(model, tokenizer, task_description: str, device) -> float:
+def score_prior(model, tokenizer, task_description: str, device):
     """
-    Prior loss: -log p(task_description | prior prompt)
+    Prior loss: -log p(task_description | prior prefix)
     """
-    messages = [{"role": "system", "content": build_prior_system_prompt()}]
-    prefix = qwen_render_messages(tokenizer, messages, add_generation_prompt=True)
-
-    nll, _ = continuation_nll_and_token_count(
+    prefix = build_prior_prefix()
+    nll, token_count = continuation_nll_and_token_count(
         model=model,
         tokenizer=tokenizer,
         prefix=prefix,
         continuation=task_description,
         device=device,
     )
-    return nll
+    return {
+        "nll": nll,
+        "token_count": token_count,
+        "avg_nll_per_token": nll / max(token_count, 1),
+    }
 
 
 def split_task_and_rollout(full_trace: str):
@@ -107,7 +98,7 @@ def split_task_and_rollout(full_trace: str):
 
 def extract_actions_from_rollout(rollout_text: str):
     """
-    Extract only the action lines from a ScienceWorld rollout.
+    Extract only action lines from a ScienceWorld rollout.
 
     Returns a list like:
       ["> look around", "> go to kitchen", ...]
@@ -122,7 +113,7 @@ def extract_actions_from_rollout(rollout_text: str):
 
 def actions_to_continuation(actions):
     """
-    Convert action list into the continuation string to be scored.
+    Convert action list into a continuation string.
     """
     if not actions:
         return ""
@@ -131,20 +122,9 @@ def actions_to_continuation(actions):
 
 def score_action_sequence(model, tokenizer, task_description: str, actions, device):
     """
-    Score only the action sequence, ignoring observations entirely.
-
-    Returns:
-      {
-        "total_nll": ...,
-        "num_actions": ...,
-        "total_action_tokens": ...,
-        "avg_nll_per_action": ...,
-        "avg_nll_per_token": ...
-      }
+    Score only the action sequence under the candidate task description.
     """
-    messages = [{"role": "system", "content": build_action_scoring_system_prompt(task_description)}]
-    prefix = qwen_render_messages(tokenizer, messages, add_generation_prompt=True)
-
+    prefix = build_action_likelihood_prefix(task_description)
     continuation = actions_to_continuation(actions)
 
     total_nll, total_action_tokens = continuation_nll_and_token_count(
@@ -156,15 +136,13 @@ def score_action_sequence(model, tokenizer, task_description: str, actions, devi
     )
 
     num_actions = len(actions)
-    avg_nll_per_action = total_nll / max(num_actions, 1)
-    avg_nll_per_token = total_nll / max(total_action_tokens, 1)
 
     return {
         "total_nll": total_nll,
         "num_actions": num_actions,
         "total_action_tokens": total_action_tokens,
-        "avg_nll_per_action": avg_nll_per_action,
-        "avg_nll_per_token": avg_nll_per_token,
+        "avg_nll_per_action": total_nll / max(num_actions, 1),
+        "avg_nll_per_token": total_nll / max(total_action_tokens, 1),
     }
 
 
@@ -183,21 +161,35 @@ def score_likelihood(model, tokenizer, task_description: str, rollout_text: str,
     )
 
 
-def print_score_summary(name: str, prior_loss: float, likelihood_info: dict):
-    total_loss = prior_loss + likelihood_info["total_nll"]
-
+def print_score_summary(name: str, prior_info: dict, likelihood_info: dict):
     print(f"\n=== {name} ===")
-    print(f"Prior loss (-log p(z)):                 {prior_loss:.4f}")
+    print(f"Prior loss (-log p(z)):                 {prior_info['nll']:.4f}")
+    print(f"Prior avg loss / token:                {prior_info['avg_nll_per_token']:.4f}")
     print(f"Likelihood loss (-log p(actions|z)):   {likelihood_info['total_nll']:.4f}")
-    print(f"Total loss:                            {total_loss:.4f}")
     print(f"Num actions:                           {likelihood_info['num_actions']}")
     print(f"Total action tokens:                   {likelihood_info['total_action_tokens']}")
     print(f"Avg likelihood loss / action:          {likelihood_info['avg_nll_per_action']:.4f}")
     print(f"Avg likelihood loss / token:           {likelihood_info['avg_nll_per_token']:.4f}")
 
 
+def print_likelihood_ranking(results):
+    """
+    Rank candidates by likelihood only.
+    Lower is better.
+    """
+    ranked = sorted(results.items(), key=lambda kv: kv[1]["likelihood"]["avg_nll_per_token"])
+
+    print("\n=== Likelihood-only ranking (lower avg loss/token is better) ===")
+    for i, (name, info) in enumerate(ranked, start=1):
+        print(
+            f"{i}. {name:<8} "
+            f"avg_nll/token={info['likelihood']['avg_nll_per_token']:.4f} | "
+            f"total_nll={info['likelihood']['total_nll']:.4f}"
+        )
+
+
 def main():
-    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    model_name = "Qwen/Qwen2.5-7B"
 
     full_trace = """
 Task Description: Your task is to change the state of matter of water. First, focus on the substance. Then, take actions that will cause it to change its state of matter.
@@ -377,26 +369,29 @@ You decide to wait for 1 iterations. (Task Completed)
     for action in actions:
         print(action)
 
-    concise_prior = score_prior(model, tokenizer, candidate_concise, device)
-    concise_likelihood = score_likelihood(model, tokenizer, candidate_concise, observed_rollout, device)
+    candidates = {
+        "CONCISE": candidate_concise,
+        "DUMMY": candidate_dummy,
+        "FALSE": candidate_false,
+    }
 
-    dummy_prior = score_prior(model, tokenizer, candidate_dummy, device)
-    dummy_likelihood = score_likelihood(model, tokenizer, candidate_dummy, observed_rollout, device)
+    results = {}
 
-    false_prior = score_prior(model, tokenizer, candidate_false, device)
-    false_likelihood = score_likelihood(model, tokenizer, candidate_false, observed_rollout, device)
+    for name, candidate in candidates.items():
+        prior_info = score_prior(model, tokenizer, candidate, device)
+        likelihood_info = score_likelihood(model, tokenizer, candidate, observed_rollout, device)
+        results[name] = {
+            "task": candidate,
+            "prior": prior_info,
+            "likelihood": likelihood_info,
+        }
 
-    print("\nConcise task description:")
-    print(candidate_concise)
-    print_score_summary("CONCISE", concise_prior, concise_likelihood)
+    for name in ["CONCISE", "DUMMY", "FALSE"]:
+        print(f"\n{name} task description:")
+        print(results[name]["task"])
+        print_score_summary(name, results[name]["prior"], results[name]["likelihood"])
 
-    print("\nDummy / overfit task description:")
-    print(candidate_dummy)
-    print_score_summary("DUMMY", dummy_prior, dummy_likelihood)
-
-    print("\nFalse task description:")
-    print(candidate_false)
-    print_score_summary("FALSE", false_prior, false_likelihood)
+    print_likelihood_ranking(results)
 
 
 if __name__ == "__main__":
