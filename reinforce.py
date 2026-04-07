@@ -1,5 +1,5 @@
-import copy
 import torch
+import matplotlib.pyplot as plt
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import LoraConfig, TaskType, get_peft_model
 
@@ -11,25 +11,29 @@ from peft import LoraConfig, TaskType, get_peft_model
 MODEL_NAME = "Qwen/Qwen2.5-0.5B"
 MAX_NEW_TOKENS = 96
 TEMPERATURE = 0.8
-LR = 5e-4
+LR = 5e-5
 LAMBDA_PRIOR = 1.0
 SEED = 42
+
+NUM_EPISODES = 50
+NUM_SAMPLES_PER_EPISODE = 4
+GRAD_CLIP_NORM = 1.0
+BASELINE_MOMENTUM = 0.9
+MOVING_AVG_WINDOW = 10
 
 # LoRA config
 LORA_R = 8
 LORA_ALPHA = 16
 LORA_DROPOUT = 0.05
 
-# One toy prompt / episode
 OBSERVED_SEQUENCE = [1, 1, 2, 5, 12, 27, 58, 121, 248, 503]
 
-PROMPT = """You are given a number sequence.
+PROMPT = """# Observed sequence:
+# 1, 1, 2, 5, 12, 27, 58, 121, 248, 503
+#
+# Complete the Python generator function.
 
-Observed values:
-1, 1, 2, 5, 12, 27, 58, 121, 248, 503
-
-Write a concise Python generator function that produces this sequence.
-Return only Python code.
+def gen_sequence():
 """
 
 
@@ -56,6 +60,14 @@ def build_likelihood_prefix(z: str) -> str:
         f"{z}\n\n"
         "Output the first 10 values, comma-separated:\n"
     )
+
+
+def moving_average(values, window: int):
+    out = []
+    for i in range(len(values)):
+        start = max(0, i - window + 1)
+        out.append(sum(values[start:i + 1]) / (i - start + 1))
+    return out
 
 
 def continuation_logprob(model, tokenizer, prefix: str, continuation: str, device) -> torch.Tensor:
@@ -116,14 +128,11 @@ def compute_reward(eval_model, tokenizer, z: str, observed_sequence, lam: float,
         "reward": reward.detach(),
         "prior_nll": -float(log_p_z.item()),
         "likelihood_nll": -float(log_p_x_given_z.item()),
-        "total_objective": -float(reward.item()),
+        "total_objective": -float(reward.item()),  # J
     }
 
 
 def sample_from_policy(model, tokenizer, prompt: str, device, max_new_tokens: int, temperature: float):
-    """
-    Sample one completion z from the policy model.
-    """
     inputs = tokenizer(
         prompt,
         add_special_tokens=False,
@@ -151,9 +160,6 @@ def sample_from_policy(model, tokenizer, prompt: str, device, max_new_tokens: in
 
 
 def greedy_from_policy(model, tokenizer, prompt: str, device, max_new_tokens: int):
-    """
-    Greedy decode from the policy model.
-    """
     inputs = tokenizer(
         prompt,
         add_special_tokens=False,
@@ -170,14 +176,12 @@ def greedy_from_policy(model, tokenizer, prompt: str, device, max_new_tokens: in
 
     prompt_len = inputs["input_ids"].shape[1]
     gen_ids = generated[:, prompt_len:]
-    text = tokenizer.decode(gen_ids[0], skip_special_tokens=True)
-    return text
+    return tokenizer.decode(gen_ids[0], skip_special_tokens=True)
 
 
 def policy_logprob_of_sample(policy_model, prompt_ids: torch.Tensor, sampled_ids: torch.Tensor) -> torch.Tensor:
     """
-    Returns log pi_theta(sampled_ids | prompt) as a scalar tensor.
-    This is the differentiable quantity used in REINFORCE.
+    Returns log pi_theta(sampled_ids | prompt).
     """
     full_ids = torch.cat([prompt_ids, sampled_ids], dim=1)
 
@@ -193,13 +197,9 @@ def policy_logprob_of_sample(policy_model, prompt_ids: torch.Tensor, sampled_ids
 
 
 def build_policy_model(model_name: str, dtype, device):
-    """
-    Load a base model and wrap it with LoRA adapters.
-    Only LoRA weights are trainable.
-    """
     base = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=True,
     ).to(device)
@@ -227,12 +227,9 @@ def build_policy_model(model_name: str, dtype, device):
 
 
 def build_frozen_eval_model(model_name: str, dtype, device):
-    """
-    Frozen base evaluator model.
-    """
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map=None,
         trust_remote_code=True,
     ).to(device)
@@ -240,7 +237,6 @@ def build_frozen_eval_model(model_name: str, dtype, device):
     model.eval()
     for p in model.parameters():
         p.requires_grad = False
-
     return model
 
 
@@ -297,82 +293,102 @@ def main():
     )
     print(pre_update_greedy)
 
-    print("\n=== Episode 1: sampled output ===")
-    sample = sample_from_policy(
+    baseline = None
+    episode_mean_J = []
+    episode_mean_reward = []
+
+    for episode in range(NUM_EPISODES):
+        sample_losses = []
+        sample_rewards = []
+        sample_Js = []
+
+        for _ in range(NUM_SAMPLES_PER_EPISODE):
+            sample = sample_from_policy(
+                policy_model,
+                tokenizer,
+                PROMPT,
+                device,
+                max_new_tokens=MAX_NEW_TOKENS,
+                temperature=TEMPERATURE,
+            )
+            z = sample["text"]
+
+            reward_info = compute_reward(
+                eval_model=eval_model,
+                tokenizer=tokenizer,
+                z=z,
+                observed_sequence=OBSERVED_SEQUENCE,
+                lam=LAMBDA_PRIOR,
+                device=device,
+            )
+
+            reward = reward_info["reward"]
+            total_objective = reward_info["total_objective"]  # J
+
+            if baseline is None:
+                baseline = float(reward.item())
+            else:
+                baseline = (
+                    BASELINE_MOMENTUM * baseline
+                    + (1.0 - BASELINE_MOMENTUM) * float(reward.item())
+                )
+
+            logprob = policy_logprob_of_sample(
+                policy_model,
+                sample["prompt_ids"],
+                sample["sampled_ids"],
+            )
+
+            advantage = reward - baseline
+            policy_loss = -(advantage * logprob)
+
+            sample_losses.append(policy_loss)
+            sample_rewards.append(float(reward.item()))
+            sample_Js.append(total_objective)
+
+        mean_policy_loss = torch.stack(sample_losses).mean()
+
+        optimizer.zero_grad()
+        mean_policy_loss.backward()
+        torch.nn.utils.clip_grad_norm_(policy_model.parameters(), GRAD_CLIP_NORM)
+        optimizer.step()
+
+        mean_reward = sum(sample_rewards) / len(sample_rewards)
+        mean_J = sum(sample_Js) / len(sample_Js)
+
+        episode_mean_reward.append(mean_reward)
+        episode_mean_J.append(mean_J)
+
+        if (episode + 1) % 10 == 0 or episode == 0:
+            print(
+                f"Episode {episode + 1:03d} | "
+                f"mean J={mean_J:.4f} | "
+                f"mean reward={mean_reward:.4f} | "
+                f"baseline={baseline:.4f}"
+            )
+
+    print("\n=== Final greedy output ===")
+    final_greedy = greedy_from_policy(
         policy_model,
         tokenizer,
         PROMPT,
         device,
         max_new_tokens=MAX_NEW_TOKENS,
-        temperature=TEMPERATURE,
     )
-    z = sample["text"]
-    print(z)
+    print(final_greedy)
 
-    reward_info = compute_reward(
-        eval_model=eval_model,
-        tokenizer=tokenizer,
-        z=z,
-        observed_sequence=OBSERVED_SEQUENCE,
-        lam=LAMBDA_PRIOR,
-        device=device,
-    )
+    J_mavg = moving_average(episode_mean_J, MOVING_AVG_WINDOW)
 
-    reward = reward_info["reward"]
-
-    logprob = policy_logprob_of_sample(
-        policy_model,
-        sample["prompt_ids"],
-        sample["sampled_ids"],
-    )
-
-    baseline = 0.0
-    advantage = reward - baseline
-    policy_loss = -(advantage * logprob)
-
-    print("\n=== Evaluator scores for sampled output ===")
-    print(f"Prior loss (-log p(z)):        {reward_info['prior_nll']:.4f}")
-    print(f"Likelihood loss (-log p(x|z)): {reward_info['likelihood_nll']:.4f}")
-    print(f"Total objective J:             {reward_info['total_objective']:.4f}")
-    print(f"Reward = -J:                   {float(reward.item()):.4f}")
-
-    print("\n=== REINFORCE terms ===")
-    print(f"Policy logprob:                {float(logprob.item()):.4f}")
-    print(f"Advantage:                     {float(advantage.item()):.4f}")
-    print(f"Policy loss:                   {float(policy_loss.item()):.4f}")
-
-    optimizer.zero_grad()
-    policy_loss.backward()
-
-    grad_norm_sq = 0.0
-    for p in policy_model.parameters():
-        if p.grad is not None:
-            grad_norm_sq += p.grad.detach().float().pow(2).sum().item()
-    grad_norm = grad_norm_sq ** 0.5
-    print(f"Gradient norm:                 {grad_norm:.4f}")
-
-    optimizer.step()
-
-    print("\n=== Post-update greedy output ===")
-    post_update_greedy = greedy_from_policy(
-        policy_model,
-        tokenizer,
-        PROMPT,
-        device,
-        max_new_tokens=MAX_NEW_TOKENS,
-    )
-    print(post_update_greedy)
-
-    print("\n=== Post-update sampled output ===")
-    post_sample = sample_from_policy(
-        policy_model,
-        tokenizer,
-        PROMPT,
-        device,
-        max_new_tokens=MAX_NEW_TOKENS,
-        temperature=TEMPERATURE,
-    )
-    print(post_sample["text"])
+    plt.figure(figsize=(9, 5))
+    plt.plot(range(1, NUM_EPISODES + 1), episode_mean_J, label="Mean episode J")
+    plt.plot(range(1, NUM_EPISODES + 1), J_mavg, label=f"Moving average (window={MOVING_AVG_WINDOW})")
+    plt.xlabel("Episode")
+    plt.ylabel("Total objective J")
+    plt.title("REINFORCE training: total objective over episodes")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
