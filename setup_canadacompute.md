@@ -48,11 +48,17 @@ Host narval
     HostName narval.alliancecan.ca
     User YOUR_USERNAME
     IdentityFile ~/.ssh/id_ed25519
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlMaster auto
+    ControlPersist 1d
 
 Host vulcan
     HostName vulcan.alliancecan.ca
     User YOUR_USERNAME
     IdentityFile ~/.ssh/id_ed25519
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlMaster auto
+    ControlPersist 1d
 ```
 
 Connect:
