@@ -1,9 +1,7 @@
 import argparse
-import contextlib
 from collections import defaultdict
 from dataclasses import dataclass
 from statistics import mean
-from pathlib import Path
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -374,11 +372,6 @@ def parse_args():
         default=None,
         help="Optional cap for a faster smoke test.",
     )
-    parser.add_argument(
-        "--output-file",
-        default="scratch/dummy_scoring_new_dataset_output.txt",
-        help="File where all printed output and errors will be saved.",
-    )
     return parser.parse_args()
 
 
@@ -419,17 +412,11 @@ def run_evaluation(args):
 
 def main():
     args = parse_args()
-    output_path = Path(args.output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as output_file:
-        with contextlib.redirect_stdout(output_file), contextlib.redirect_stderr(output_file):
-            print("dummy_scoring_new_dataset.py")
-            print(f"Output file: {output_path.resolve()}")
-            print(f"Model name: {args.model_name}")
-            print(f"Max examples: {args.max_examples}")
-            print("-" * 80)
-            run_evaluation(args)
+    print("dummy_scoring_new_dataset.py")
+    print(f"Model name: {args.model_name}")
+    print(f"Max examples: {args.max_examples}")
+    print("-" * 80)
+    run_evaluation(args)
 
 
 if __name__ == "__main__":

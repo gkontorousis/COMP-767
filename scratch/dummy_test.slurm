@@ -16,7 +16,7 @@ echo "Date: $(date)"
 echo "CUDA visible devices: ${CUDA_VISIBLE_DEVICES:-none}"
 
 module load python/3.10
-python --version
+python dummy_scoring_new_dataset.py
 nvidia-smi || true
 
 echo "Dummy job completed."

@@ -143,6 +143,7 @@ Monitor:
 
 ```bash
 squeue -u $USER
+squeue --start -u $USER
 ```
 
 ---
