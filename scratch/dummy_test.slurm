@@ -10,10 +10,18 @@
 
 set -euo pipefail
 
+# Keep large HF / torch downloads on SCRATCH (not $HOME/.cache).
+export HF_HOME="${SCRATCH}/huggingface"
+export TORCH_HOME="${SCRATCH}/torch"
+export TMPDIR="${SCRATCH}/tmp/${SLURM_JOB_ID:-job}"
+mkdir -p "${HF_HOME}" "${TORCH_HOME}" "${TMPDIR}"
+
 echo "Job ID: $SLURM_JOB_ID"
 echo "Host: $(hostname)"
 echo "Date: $(date)"
 echo "CUDA visible devices: ${CUDA_VISIBLE_DEVICES:-none}"
+echo "HF_HOME: ${HF_HOME}"
+echo "TORCH_HOME: ${TORCH_HOME}"
 
 module load python/3.12
 source ~/venvs/comp767/bin/activate

@@ -49,6 +49,7 @@ def continuation_nll_and_token_count(model, tokenizer, prefix: str, continuation
         add_special_tokens=False,
         return_tensors="pt",
     ).input_ids.to(device)
+    
 
     with torch.no_grad():
         outputs = model(full_ids)

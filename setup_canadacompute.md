@@ -142,6 +142,19 @@ python -c "import torch; print('cuda:', torch.cuda.is_available())"
 
 **Slurm jobs** must load the same modules and **activate the same venv** before calling `python` (see `scratch/dummy_test.slurm`).
 
+### Hugging Face and PyTorch caches → `$SCRATCH`
+
+Model weights (often **10+ GB**) should **not** fill `$HOME`. In Slurm scripts (and interactive GPU shells), point caches at scratch **before** importing `transformers` or `torch.hub`:
+
+```bash
+export HF_HOME="${SCRATCH}/huggingface"
+export TORCH_HOME="${SCRATCH}/torch"
+export TMPDIR="${SCRATCH}/tmp/${SLURM_JOB_ID:-interactive}"
+mkdir -p "${HF_HOME}" "${TORCH_HOME}" "${TMPDIR}"
+```
+
+With `HF_HOME` set, Hugging Face Hub models go under `${HF_HOME}/hub` by default. `TORCH_HOME` covers `torch.hub` / related downloads. `TMPDIR` avoids large temp files on small local disks.
+
 ---
 
 ## 7. Running Jobs (SLURM)
@@ -150,6 +163,10 @@ python -c "import torch; print('cuda:', torch.cuda.is_available())"
 
 ```bash
 salloc --gres=gpu:1 --cpus-per-task=4 --mem=16G --time=1:00:00
+export HF_HOME="${SCRATCH}/huggingface"
+export TORCH_HOME="${SCRATCH}/torch"
+export TMPDIR="${SCRATCH}/tmp/${SLURM_JOB_ID:-interactive}"
+mkdir -p "${HF_HOME}" "${TORCH_HOME}" "${TMPDIR}"
 module load python/3.12
 source ~/venvs/comp767/bin/activate
 python train.py
@@ -165,6 +182,11 @@ python train.py
 #SBATCH --mem=32G
 #SBATCH --time=08:00:00
 #SBATCH --output=%x-%j.out
+
+export HF_HOME="${SCRATCH}/huggingface"
+export TORCH_HOME="${SCRATCH}/torch"
+export TMPDIR="${SCRATCH}/tmp/${SLURM_JOB_ID:-job}"
+mkdir -p "${HF_HOME}" "${TORCH_HOME}" "${TMPDIR}"
 
 module load python/3.12
 source ~/venvs/comp767/bin/activate

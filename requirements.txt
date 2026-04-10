@@ -1,4 +1,11 @@
-torch
-transformers
-accelerate
-sentencepiece
+# Python 3.10–3.12. Pins are chosen to install on Linux (incl. Narval) and macOS.
+# Intel macOS x86_64: PyPI only publishes torch up to 2.2.x; newer torch wheels are not published for that platform.
+# On GPU servers you may optionally upgrade torch after `pip install -r requirements.txt` (see setup_canadacompute.md).
+# NumPy 2.x can break torch 2.2 wheels built against NumPy 1.x.
+numpy==1.26.4
+torch==2.2.2
+transformers==4.44.2
+accelerate==0.34.2
+sentencepiece==0.2.0
+peft==0.12.0
+matplotlib==3.9.2
