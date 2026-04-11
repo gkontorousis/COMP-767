@@ -1,8 +1,6 @@
 import argparse
-import contextlib
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
 from statistics import mean
 
 import torch
@@ -21,6 +19,11 @@ Why this file exists:
 
 This makes it easier to test whether a good explanation lowers answer loss
 relative to generic or incorrect explanations before we invest in RL.
+
+Logging note:
+- This script prints to stdout/stderr normally.
+- On Slurm, capture logs with `#SBATCH --output` / `#SBATCH --error` (recommended),
+  or redirect at the shell level (`python ... > log.txt 2>&1`).
 """
 
 
@@ -390,11 +393,6 @@ def parse_args():
         action="store_true",
         help="Load model/tokenizer only from local files instead of the network.",
     )
-    parser.add_argument(
-        "--output-file",
-        default="scratch/dummy_scoring_new_dataset_output.txt",
-        help="File where stdout/stderr should be saved.",
-    )
     return parser.parse_args()
 
 
@@ -468,20 +466,14 @@ def run_evaluation(args):
 
 def main():
     args = parse_args()
-    output_path = Path(args.output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as output_file:
-        with contextlib.redirect_stdout(output_file), contextlib.redirect_stderr(output_file):
-            print("dummy_scoring_new_dataset.py")
-            print(f"Model name: {args.model_name}")
-            print(f"Model path: {args.model_path}")
-            print(f"Cache dir: {args.cache_dir}")
-            print(f"Local files only: {args.local_files_only}")
-            print(f"Max examples: {args.max_examples}")
-            print(f"Output file: {output_path.resolve()}")
-            print("-" * 80)
-            run_evaluation(args)
+    print("dummy_scoring_new_dataset.py")
+    print(f"Model name: {args.model_name}")
+    print(f"Model path: {args.model_path}")
+    print(f"Cache dir: {args.cache_dir}")
+    print(f"Local files only: {args.local_files_only}")
+    print(f"Max examples: {args.max_examples}")
+    print("-" * 80)
+    run_evaluation(args)
 
 
 if __name__ == "__main__":

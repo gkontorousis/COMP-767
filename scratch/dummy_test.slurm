@@ -5,6 +5,8 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8192M
 #SBATCH --time=01:00:00
+# Slurm captures the job's stdout/stderr here (relative to the submit directory
+# unless you use an absolute path). `%x` is the job name, `%j` is the job id.
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 
@@ -27,9 +29,6 @@ MODEL_PATH="${MODEL_PATH:-}"
 # instead of a dedicated --model-path directory.
 MODEL_CACHE_DIR="${MODEL_CACHE_DIR:-}"
 
-# Where the Python script writes its redirected stdout/stderr.
-OUTPUT_FILE="${OUTPUT_FILE:-${SCRATCH}/dummy_scoring_new_dataset_output.txt}"
-
 echo "Job ID: $SLURM_JOB_ID"
 echo "Host: $(hostname)"
 echo "Date: $(date)"
@@ -38,7 +37,8 @@ echo "HF_HOME: ${HF_HOME}"
 echo "TORCH_HOME: ${TORCH_HOME}"
 echo "MODEL_PATH: ${MODEL_PATH:-<unset>}"
 echo "MODEL_CACHE_DIR: ${MODEL_CACHE_DIR:-<unset>}"
-echo "OUTPUT_FILE: ${OUTPUT_FILE}"
+echo "Slurm stdout: ${SLURM_SUBMIT_DIR:-.}/dummy-test-${SLURM_JOB_ID}.out"
+echo "Slurm stderr: ${SLURM_SUBMIT_DIR:-.}/dummy-test-${SLURM_JOB_ID}.err"
 
 module load python/3.12
 source ~/venvs/comp767/bin/activate
@@ -72,7 +72,6 @@ python -u dummy_scoring_new_dataset.py \
   --model-path "${MODEL_PATH}" \
   "${CACHE_ARGS[@]}" \
   --local-files-only \
-  --output-file "${OUTPUT_FILE}" \
   "$@"
 nvidia-smi || true
 
