@@ -26,7 +26,7 @@ echo "TORCH_HOME: ${TORCH_HOME}"
 module load python/3.12
 source ~/venvs/comp767/bin/activate
 export PYTHONUNBUFFERED=1
-python -u dummy_scoring_new_dataset.py
+python -u dummy_scoring_new_dataset.py "$@"
 nvidia-smi || true
 
 echo "Dummy job completed."
