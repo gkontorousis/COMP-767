@@ -19,9 +19,12 @@ export TMPDIR="${SCRATCH}/tmp/${SLURM_JOB_ID:-job}"
 mkdir -p "${HF_HOME}" "${TORCH_HOME}" "${TMPDIR}"
 
 # Narval compute nodes are typically offline. Download the model once on a
-# login node, then point MODEL_PATH at that local directory.
+# login node, then point MODEL_PATH at the *parent directory* that contains
+# per-model folders. Pick the model by passing `--model-name <folder>` to this
+# Slurm script (it is forwarded to the Python entrypoint via "$@").
 #
 # Example (login node):
+#   mkdir -p "${SCRATCH}/models"
 #   huggingface-cli download Qwen/Qwen2.5-7B --local-dir "${SCRATCH}/models/Qwen2.5-7B"
 MODEL_PATH="${MODEL_PATH:-}"
 
@@ -35,8 +38,14 @@ echo "Date: $(date)"
 echo "CUDA visible devices: ${CUDA_VISIBLE_DEVICES:-none}"
 echo "HF_HOME: ${HF_HOME}"
 echo "TORCH_HOME: ${TORCH_HOME}"
-echo "MODEL_PATH: ${MODEL_PATH:-<unset>}"
+echo "MODEL_PATH (models root): ${MODEL_PATH:-<unset>}"
 echo "MODEL_CACHE_DIR: ${MODEL_CACHE_DIR:-<unset>}"
+if [[ "$#" -gt 0 ]]; then
+  echo "Forwarded sbatch args:"
+  printf '  %q\n' "$@"
+else
+  echo "Forwarded sbatch args: <none>"
+fi
 echo "Slurm stdout: ${SLURM_SUBMIT_DIR:-.}/dummy-test-${SLURM_JOB_ID}.out"
 echo "Slurm stderr: ${SLURM_SUBMIT_DIR:-.}/dummy-test-${SLURM_JOB_ID}.err"
 
@@ -50,7 +59,7 @@ echo "PWD: $(pwd)"
 if [[ -z "${MODEL_PATH}" ]]; then
   echo "ERROR: MODEL_PATH is not set."
   echo "Download the model on a login node, then re-submit with:"
-  echo "  sbatch --export=ALL,MODEL_PATH=\"${SCRATCH}/models/Qwen2.5-7B\" scratch/dummy_test.slurm"
+  echo "  sbatch --export=ALL,MODEL_PATH=\"${SCRATCH}/models\" scratch/dummy_test.slurm --model-name Qwen2.5-7B"
   exit 2
 fi
 

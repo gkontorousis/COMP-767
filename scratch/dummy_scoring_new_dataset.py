@@ -1,6 +1,7 @@
 import argparse
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from statistics import mean
 
 import torch
@@ -24,6 +25,12 @@ Logging note:
 - This script prints to stdout/stderr normally.
 - On Slurm, capture logs with `#SBATCH --output` / `#SBATCH --error` (recommended),
   or redirect at the shell level (`python ... > log.txt 2>&1`).
+
+Model loading note:
+- `--model-path` is treated as a *parent directory* that contains one folder per model.
+- The specific model folder name comes from `--model-name` (e.g. `Qwen2.5-7B`).
+- If `--model-path` is not set, `--model-name` is passed straight to `from_pretrained`
+  (so it can still be a Hugging Face repo id like `Qwen/Qwen2.5-7B` when you have network).
 """
 
 
@@ -371,11 +378,22 @@ def print_aggregate_summary(all_results):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", default="Qwen/Qwen2.5-7B")
+    parser.add_argument(
+        "--model-name",
+        default="Qwen2.5-7B",
+        help=(
+            "Model identifier. If --model-path is set, this should be the subdirectory "
+            "name under that folder (e.g. Qwen2.5-7B). If --model-path is not set, this "
+            "is passed directly to from_pretrained (often a Hub repo id)."
+        ),
+    )
     parser.add_argument(
         "--model-path",
         default=None,
-        help="Optional local path to a downloaded Hugging Face model directory.",
+        help=(
+            "Optional parent directory of locally downloaded models. The resolved model "
+            "directory is MODEL_PATH / MODEL_NAME."
+        ),
     )
     parser.add_argument(
         "--max-examples",
@@ -397,7 +415,17 @@ def parse_args():
 
 
 def load_model_and_tokenizer(args, dtype, device):
-    model_source = args.model_path or args.model_name
+    if args.model_path is not None:
+        if ("/" in args.model_name) or ("\\" in args.model_name):
+            raise ValueError(
+                "When --model-path is set, --model-name must be a single folder name "
+                f"(no path separators). Got: {args.model_name!r}"
+            )
+
+        model_dir = Path(args.model_path).expanduser().resolve() / args.model_name
+        model_source = str(model_dir)
+    else:
+        model_source = args.model_name
     load_kwargs = {
         "trust_remote_code": True,
         "local_files_only": args.local_files_only,
@@ -406,6 +434,9 @@ def load_model_and_tokenizer(args, dtype, device):
         load_kwargs["cache_dir"] = args.cache_dir
 
     print(f"Model source: {model_source}")
+    if args.model_path is not None:
+        print(f"Models root: {args.model_path}")
+        print(f"Model folder: {args.model_name}")
     print(f"Local files only: {args.local_files_only}")
     if args.cache_dir is not None:
         print(f"Cache dir: {args.cache_dir}")
@@ -428,7 +459,7 @@ def load_model_and_tokenizer(args, dtype, device):
             "If this is running on Narval, the compute node likely has no outbound network access.",
             "Use one of these options:",
             "1. Pre-download the model on a login node or other machine with internet access.",
-            "2. Pass --model-path to that local model directory.",
+            "2. Pass --model-path to the parent folder and --model-name to the per-model folder.",
             "3. Re-run with --local-files-only so transformers does not try the network.",
             "4. If you use a cache, point --cache-dir at the same cache location.",
         ]
