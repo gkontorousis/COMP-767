@@ -1,6 +1,8 @@
 import argparse
+import contextlib
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from statistics import mean
 
 import torch
@@ -368,12 +370,77 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", default="Qwen/Qwen2.5-7B")
     parser.add_argument(
+        "--model-path",
+        default=None,
+        help="Optional local path to a downloaded Hugging Face model directory.",
+    )
+    parser.add_argument(
         "--max-examples",
         type=int,
         default=None,
         help="Optional cap for a faster smoke test.",
     )
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional Hugging Face cache directory.",
+    )
+    parser.add_argument(
+        "--local-files-only",
+        action="store_true",
+        help="Load model/tokenizer only from local files instead of the network.",
+    )
+    parser.add_argument(
+        "--output-file",
+        default="scratch/dummy_scoring_new_dataset_output.txt",
+        help="File where stdout/stderr should be saved.",
+    )
     return parser.parse_args()
+
+
+def load_model_and_tokenizer(args, dtype, device):
+    model_source = args.model_path or args.model_name
+    load_kwargs = {
+        "trust_remote_code": True,
+        "local_files_only": args.local_files_only,
+    }
+    if args.cache_dir is not None:
+        load_kwargs["cache_dir"] = args.cache_dir
+
+    print(f"Model source: {model_source}")
+    print(f"Local files only: {args.local_files_only}")
+    if args.cache_dir is not None:
+        print(f"Cache dir: {args.cache_dir}")
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_source,
+            **load_kwargs,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            torch_dtype=dtype,
+            device_map="auto" if torch.cuda.is_available() else None,
+            **load_kwargs,
+        )
+    except OSError as exc:
+        hint_lines = [
+            "",
+            "Model loading failed.",
+            "If this is running on Narval, the compute node likely has no outbound network access.",
+            "Use one of these options:",
+            "1. Pre-download the model on a login node or other machine with internet access.",
+            "2. Pass --model-path to that local model directory.",
+            "3. Re-run with --local-files-only so transformers does not try the network.",
+            "4. If you use a cache, point --cache-dir at the same cache location.",
+        ]
+        raise RuntimeError("\n".join(hint_lines)) from exc
+
+    if not torch.cuda.is_available():
+        model = model.to(device)
+
+    model.eval()
+    return tokenizer, model
 
 
 def run_evaluation(args):
@@ -381,20 +448,8 @@ def run_evaluation(args):
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
     print(f"Using device: {device}")
-    print(f"Loading model: {args.model_name}")
-
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        torch_dtype=dtype,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
-
-    if not torch.cuda.is_available():
-        model = model.to(device)
-
-    model.eval()
+    print(f"Requested model name: {args.model_name}")
+    tokenizer, model = load_model_and_tokenizer(args, dtype, device)
 
     examples = build_examples()
     if args.max_examples is not None:
@@ -413,11 +468,20 @@ def run_evaluation(args):
 
 def main():
     args = parse_args()
-    print("dummy_scoring_new_dataset.py")
-    print(f"Model name: {args.model_name}")
-    print(f"Max examples: {args.max_examples}")
-    print("-" * 80)
-    run_evaluation(args)
+    output_path = Path(args.output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "w", encoding="utf-8") as output_file:
+        with contextlib.redirect_stdout(output_file), contextlib.redirect_stderr(output_file):
+            print("dummy_scoring_new_dataset.py")
+            print(f"Model name: {args.model_name}")
+            print(f"Model path: {args.model_path}")
+            print(f"Cache dir: {args.cache_dir}")
+            print(f"Local files only: {args.local_files_only}")
+            print(f"Max examples: {args.max_examples}")
+            print(f"Output file: {output_path.resolve()}")
+            print("-" * 80)
+            run_evaluation(args)
 
 
 if __name__ == "__main__":
