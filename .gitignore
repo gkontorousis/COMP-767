@@ -217,8 +217,13 @@ __marimo__/
 *.toc
 *.lof
 *.lot
-project_paper/*.out
+*.nav
+*.snm
 # *.log already ignored above — covers pdflatex logs
+project_paper/*.out
 project_paper/*.pdf
+poster/*.out
+poster/*.pdf
 
 test.csv
+.vscode/settings.json
