@@ -1,0 +1,268 @@
+% !TEX program = lualatex
+\documentclass[final]{beamer}
+
+% Gemini-style portrait poster starter
+% 24in x 36in portrait, 3 columns
+% Compile with: pdflatex (or lualatex/xelatex if you add custom fonts)
+
+\usepackage[size=custom,width=60.96,height=91.44,scale=1.0]{beamerposter}
+\usetheme{gemini}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath, amssymb, bm}
+\usepackage{multicol}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{tikz}
+% enumitem is incompatible with beamer; use beamer's native list spacing instead
+
+% -----------------------------
+% Gemini-like color palette
+% -----------------------------
+\definecolor{GeminiBlue}{RGB}{33, 97, 140}
+\definecolor{GeminiLightBlue}{RGB}{236, 244, 252}
+\definecolor{GeminiDark}{RGB}{36, 41, 46}
+\definecolor{GeminiGray}{RGB}{90, 98, 108}
+\definecolor{GeminiAccent}{RGB}{0, 114, 178}
+
+\setbeamercolor{headline}{fg=white,bg=GeminiBlue}
+\setbeamercolor{title in headline}{fg=white}
+\setbeamercolor{author in headline}{fg=white}
+\setbeamercolor{institute in headline}{fg=white}
+
+\setbeamercolor{block title}{fg=GeminiBlue,bg=white}
+\setbeamercolor{block body}{fg=black,bg=white}
+
+\setbeamercolor{block alerted title}{fg=white,bg=GeminiBlue}
+\setbeamercolor{block alerted body}{fg=black,bg=GeminiLightBlue}
+
+\setbeamercolor{block example title}{fg=white,bg=GeminiAccent}
+\setbeamercolor{block example body}{fg=black,bg=GeminiLightBlue}
+
+\setbeamercolor{normal text}{fg=GeminiDark,bg=white}
+\setbeamercolor{footline}{fg=white,bg=GeminiBlue}
+
+% -----------------------------
+% Layout
+% -----------------------------
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.025\paperwidth}
+\setlength{\colwidth}{0.30\paperwidth}
+% 1 sep + 3 cols + 2 inner seps + 1 sep = 2*sep + 3*col + 2*sep = 4*sep + 3*col
+% Here: 4*0.025 + 3*0.30 = 1.00
+
+\setlength{\parskip}{0.4em}
+\renewcommand{\arraystretch}{1.2}
+
+\captionsetup{font=large}
+\setlength{\leftmargini}{1.5em}
+\setlength{\leftmarginii}{1.5em}
+
+% -----------------------------
+% Metadata
+% -----------------------------
+\title{Your Poster Title Goes Here}
+\author{First Author \and Second Author \and Third Author}
+\institute{Department or Lab \quad\textbar\quad University or Organization}
+
+% Optional logos
+% \logoright{\includegraphics[height=5cm]{logo_right.pdf}}
+% \logoleft{\includegraphics[height=5cm]{logo_left.pdf}}
+
+% -----------------------------
+% Helper commands
+% -----------------------------
+\newcommand{\panelspace}{\vspace{0.6em}}
+\newcommand{\placeholderfigure}[2][0.95\linewidth]{%
+  \begin{center}
+    \fbox{\parbox[c][#2][c]{#1}{\centering Placeholder figure}}
+  \end{center}
+}
+
+\begin{document}
+
+\begin{frame}[t]
+\begin{columns}[t]
+
+\begin{column}{\sepwidth}\end{column}
+
+% =============================
+% Column 1
+% =============================
+\begin{column}{\colwidth}
+
+\begin{alertblock}{Key Message}
+\justifying
+State the poster's main takeaway in 2--4 sentences. This should be the first thing a reader understands from several feet away.
+\end{alertblock}
+
+\begin{block}{Introduction}
+\justifying
+Briefly explain the problem, why it matters, and what gap your work addresses.
+
+\begin{itemize}
+  \item Motivation point one
+  \item Motivation point two
+  \item Why existing methods are limited
+\end{itemize}
+\end{block}
+
+\begin{block}{Problem Setup}
+\justifying
+Define the setting, assumptions, or notation.
+
+\begin{equation}
+\mathcal{L}(\theta) = \sum_{i=1}^{N} \ell(f_{\theta}(x_i), y_i)
+\end{equation}
+
+\begin{itemize}
+  \item Input:
+  \item Output:
+  \item Goal:
+\end{itemize}
+\end{block}
+
+\begin{block}{Method Overview}
+\justifying
+Summarize your method at a high level. Keep this section scannable.
+
+\placeholderfigure{10cm}
+
+\begin{enumerate}
+  \item Step one
+  \item Step two
+  \item Step three
+\end{enumerate}
+\end{block}
+
+\end{column}
+
+\begin{column}{\sepwidth}\end{column}
+
+% =============================
+% Column 2
+% =============================
+\begin{column}{\colwidth}
+
+\begin{block}{Model / Approach}
+\justifying
+Describe the core idea more precisely.
+
+\begin{equation}
+p(z \mid x) \propto p(x \mid z)\,p(z)
+\end{equation}
+
+\begin{equation}
+\mathrm{Score}(z, x) = -\log p(z) - \log p(x \mid z)
+\end{equation}
+
+\begin{itemize}
+  \item What is optimized
+  \item What is fixed
+  \item Why the objective is useful
+\end{itemize}
+\end{block}
+
+\begin{block}{Experimental Setup}
+\justifying
+List datasets, baselines, metrics, and implementation details.
+
+\begin{itemize}
+  \item Datasets:
+  \item Baselines:
+  \item Metrics:
+  \item Training details:
+\end{itemize}
+\end{block}
+
+\begin{alertblock}{Main Result}
+\justifying
+Highlight the most important quantitative or qualitative finding here.
+
+\placeholderfigure{12cm}
+\end{alertblock}
+
+\begin{block}{Results Table}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Method & Metric 1 $\downarrow$ & Metric 2 $\uparrow$ & Time \\
+\midrule
+Baseline A & 0.81 & 72.4 & 1.0x \\
+Baseline B & 0.74 & 75.9 & 1.3x \\
+Ours       & \textbf{0.62} & \textbf{81.7} & 1.1x \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{block}
+
+\end{column}
+
+\begin{column}{\sepwidth}\end{column}
+
+% =============================
+% Column 3
+% =============================
+\begin{column}{\colwidth}
+
+\begin{block}{Analysis}
+\justifying
+Use this section for ablations, interpretation, or error analysis.
+
+\begin{itemize}
+  \item Ablation one
+  \item Ablation two
+  \item Failure mode or caveat
+\end{itemize}
+
+\placeholderfigure{9cm}
+\end{block}
+
+\begin{block}{Discussion}
+\justifying
+Explain what the results mean and why they matter.
+
+\begin{itemize}
+  \item Practical implication
+  \item Scientific implication
+  \item Limitation
+\end{itemize}
+\end{block}
+
+\begin{block}{Conclusion}
+\justifying
+Summarize the contribution in a few lines.
+
+\begin{itemize}
+  \item Main contribution
+  \item Main empirical finding
+  \item Future direction
+\end{itemize}
+\end{block}
+
+\begin{block}{References}
+\small
+[1] Author et al. Title. Venue, Year.\\
+[2] Author et al. Title. Venue, Year.\\
+[3] Author et al. Title. Venue, Year.
+\end{block}
+
+\begin{alertblock}{Contact}
+\small
+Name Surname\\
+email@university.edu\\
+lab / website / QR code
+\end{alertblock}
+
+\end{column}
+
+\begin{column}{\sepwidth}\end{column}
+
+\end{columns}
+\end{frame}
+
+\end{document}
