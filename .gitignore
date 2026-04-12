@@ -219,11 +219,13 @@ __marimo__/
 *.lot
 *.nav
 *.snm
+*.bcf
+*.run.xml
 # *.log already ignored above — covers pdflatex logs
 project_paper/*.out
 project_paper/*.pdf
-poster/*.out
-poster/*.pdf
+poster/out/*
+!poster/out/poster.pdf
 
 test.csv
 .vscode/settings.json

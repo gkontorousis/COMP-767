@@ -2,7 +2,7 @@
 
 A 24×36in portrait LaTeX poster based on the [Gemini beamerposter theme](https://github.com/anishathalye/gemini).
 
-The working file for this project is `gemini_portrait_24x36_3col.tex`.
+The working file for this project is `poster.tex`.
 
 ---
 
@@ -91,7 +91,7 @@ code --install-extension James-Yu.latex-workshop
 The workspace includes a `.vscode/settings.json` that configures LaTeX Workshop to use **lualatex** automatically (required by the Gemini theme's `fontspec`-based fonts).
 
 1. Open the repo root in VS Code
-2. Open `poster/gemini_portrait_24x36_3col.tex`
+2. Open `poster/poster.tex`
 3. Press `Cmd+Shift+P` → **LaTeX Workshop: Build with recipe**  
    Select **latexmk (lualatex)**  
    (or just save the file — it will build automatically)
@@ -103,10 +103,10 @@ The workspace includes a `.vscode/settings.json` that configures LaTeX Workshop 
 
 ```bash
 cd poster
-latexmk -lualatex -f gemini_portrait_24x36_3col.tex
+latexmk -lualatex -f poster.tex
 ```
 
-The `-f` flag forces latexmk to finish even when `beamerposter` triggers non-fatal `fp` errors. The output PDF will be `gemini_portrait_24x36_3col.pdf`.
+The `-f` flag forces latexmk to finish even when `beamerposter` triggers non-fatal `fp` errors. The output PDF will be `poster.pdf`.
 
 ---
 
@@ -122,7 +122,7 @@ The `.latexmkrc` in the `poster/` directory sets `$pdf_mode = 4` (lualatex), and
 
 | File | Description |
 |------|-------------|
-| `gemini_portrait_24x36_3col.tex` | Main poster source (24×36in, 3 columns) |
+| `poster.tex` | Main poster source (24×36in, 3 columns) |
 | `poster.bib` | BibTeX bibliography |
 | `beamerthemegemini.sty` | Gemini layout theme |
 | `beamercolorthemegemini.sty` | Default blue color theme |
@@ -141,7 +141,7 @@ Run: `tlmgr install changepage`
 Make sure you're using **lualatex**, not pdflatex. Check that the recipe in VS Code is set to `latexmk (lualatex)`.
 
 **VS Code is using pdflatex instead of lualatex**  
-Open the workspace from the repo root so `.vscode/settings.json` is picked up. Alternatively, add the `% !TEX program = lualatex` magic comment at the top of your `.tex` file (already present in `gemini_portrait_24x36_3col.tex`).
+Open the workspace from the repo root so `.vscode/settings.json` is picked up. Alternatively, add the `% !TEX program = lualatex` magic comment at the top of your `.tex` file (already present in `poster.tex`).
 
 **`tlmgr: permission denied`**  
 If TinyTeX was installed as root, prefix with `sudo`. If installed as the current user (default), it should not require sudo.
