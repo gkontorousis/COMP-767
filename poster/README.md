@@ -46,10 +46,26 @@ tlmgr install \
   type1cm fp \
   changepage ragged2e \
   booktabs caption \
-  enumitem cm-super
+  cm-super \
+  biblatex biber
 ```
 
-> **Note:** `lato` and `raleway` are OFL-licensed font packages (~15 MB each) used by the Gemini theme for headlines and body text.
+| Package | Why it's needed |
+|---------|-----------------|
+| `beamerposter` | Core poster sizing and layout |
+| `beamer` | Document class used by beamerposter |
+| `pgf` | Graphics/TikZ backend |
+| `lato` | Lato OTF font (body text) |
+| `raleway` | Raleway OTF font (headlines) |
+| `type1cm` | Required internally by beamerposter |
+| `fp` | Fixed-point arithmetic used by beamerposter for scaling |
+| `changepage` | Required by `beamerthemegemini.sty` for alerted block margins |
+| `ragged2e` | `\justifying` command used throughout the theme |
+| `booktabs` | `\toprule`, `\midrule`, `\bottomrule` for tables |
+| `caption` | `\captionsetup` for figure/table captions |
+| `cm-super` | Type1 versions of Computer Modern (math fonts) |
+| `biblatex` | Bibliography management (`\cite`, `\printbibliography`) |
+| `biber` | Bibliography processor backend for biblatex |
 
 ### 3. Install the VS Code Extension
 
@@ -74,8 +90,8 @@ code --install-extension James-Yu.latex-workshop
 
 The workspace includes a `.vscode/settings.json` that configures LaTeX Workshop to use **lualatex** automatically (required by the Gemini theme's `fontspec`-based fonts).
 
-1. Open the `poster/` folder in VS Code
-2. Open `gemini_portrait_24x36_3col.tex`
+1. Open the repo root in VS Code
+2. Open `poster/gemini_portrait_24x36_3col.tex`
 3. Press `Cmd+Shift+P` → **LaTeX Workshop: Build with recipe**  
    Select **latexmk (lualatex)**  
    (or just save the file — it will build automatically)
@@ -106,14 +122,13 @@ The `.latexmkrc` in the `poster/` directory sets `$pdf_mode = 4` (lualatex), and
 
 | File | Description |
 |------|-------------|
-| `gemini_portrait_24x36_3col.tex` | Main poster template (24×36in, 3 columns) |
-| `poster.tex` | Original upstream Gemini demo poster |
+| `gemini_portrait_24x36_3col.tex` | Main poster source (24×36in, 3 columns) |
+| `poster.bib` | BibTeX bibliography |
 | `beamerthemegemini.sty` | Gemini layout theme |
 | `beamercolorthemegemini.sty` | Default blue color theme |
 | `beamercolorthememit.sty` | MIT color theme |
 | `beamercolorthemelabsix.sty` | LabSix color theme |
-| `poster.bib` | BibTeX bibliography file |
-| `.latexmkrc` | latexmk config (sets lualatex engine) |
+| `.latexmkrc` | latexmk config (lualatex engine + biber) |
 
 ---
 
@@ -124,9 +139,6 @@ Run: `tlmgr install changepage`
 
 **`File 'fontspec.sty' not found`** or font errors  
 Make sure you're using **lualatex**, not pdflatex. Check that the recipe in VS Code is set to `latexmk (lualatex)`.
-
-**`enumitem` conflicts with beamer**  
-Do not use `\usepackage{enumitem}` in beamer documents. Use `\setlength{\leftmargini}{...}` for list indentation instead.
 
 **VS Code is using pdflatex instead of lualatex**  
 Open the workspace from the repo root so `.vscode/settings.json` is picked up. Alternatively, add the `% !TEX program = lualatex` magic comment at the top of your `.tex` file (already present in `gemini_portrait_24x36_3col.tex`).
