@@ -53,7 +53,8 @@ tlmgr install \
   psnfss \
   float \
   xcolor \
-  preprint
+  preprint \
+  pgfplots
 
 echo ""
 echo "✓ All done. Both projects are ready to build."
