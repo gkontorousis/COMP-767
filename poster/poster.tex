@@ -1,8 +1,8 @@
 \documentclass[final]{beamer}
 
-% Gemini-style portrait poster starter
+% Linguistic MDL Explanations with LLMs — via Occam-Style Prompt Discovery
 % 24in x 36in portrait, 3 columns
-% Compile with: pdflatex (or lualatex/xelatex if you add custom fonts)
+% Compile with: lualatex (via latexmk, engine set in .latexmkrc)
 
 \usepackage[size=custom,width=60.96,height=91.44,scale=1.0]{beamerposter}
 \usetheme{gemini}
@@ -16,6 +16,7 @@
 \usepackage{caption}
 \usepackage{xcolor}
 \usepackage{tikz}
+\usetikzlibrary{positioning}
 % enumitem is incompatible with beamer; use beamer's native list spacing instead
 
 \usepackage[backend=biber,style=numeric,sorting=none,maxnames=3]{biblatex}
@@ -54,8 +55,6 @@
 \newlength{\colwidth}
 \setlength{\sepwidth}{0.025\paperwidth}
 \setlength{\colwidth}{0.30\paperwidth}
-% 1 sep + 3 cols + 2 inner seps + 1 sep = 2*sep + 3*col + 2*sep = 4*sep + 3*col
-% Here: 4*0.025 + 3*0.30 = 1.00
 
 \setlength{\parskip}{0.4em}
 \renewcommand{\arraystretch}{1.2}
@@ -67,13 +66,9 @@
 % -----------------------------
 % Metadata
 % -----------------------------
-\title{Your Poster Title Goes Here}
-\author{First Author \and Second Author \and Third Author}
-\institute{Department or Lab \quad\textbar\quad University or Organization}
-
-% Optional logos
-% \logoright{\includegraphics[height=5cm]{logo_right.pdf}}
-% \logoleft{\includegraphics[height=5cm]{logo_left.pdf}}
+\title{Linguistic MDL Explanations with LLMs \\ \large via Occam-Style Prompt Discovery}
+\author{Yassine Meliani$^1$ \and George Kontorousis$^1$ \and Eric Elmoznino$^2$}
+\institute{$^1$Department of Computer Science, McGill University \quad\textbar\quad $^2$Mila Québec}
 
 % -----------------------------
 % Helper commands
@@ -99,46 +94,46 @@
 
 \begin{alertblock}{Key Message}
 \justifying
-State the poster's main takeaway in 2--4 sentences. This should be the first thing a reader understands from several feet away.
+We formalize Occam's razor for linguistic explanations: prefer prompts that are simultaneously \textbf{concise} and \textbf{predictive}. Minimum Description Length (MDL) provides this principle rigorously, and we train an amortized RL policy to discover such explanations across datasets.
 \end{alertblock}
 
-\begin{block}{Introduction}
+\begin{block}{Motivation}
 \justifying
-Briefly explain the problem, why it matters, and what gap your work addresses.
+Prompted LLMs act as universal function approximators~\cite{petrov2024} --- prompts play the role of natural-language ``parameters'' determining model behavior.
 
 \begin{itemize}
-  \item Motivation point one
-  \item Motivation point two
-  \item Why existing methods are limited
+  \item Current approaches are \textbf{heuristic}: manual prompt engineering, post-hoc requests, or unconstrained generation
+  \item Long explanations may overfit; short ones may underfit --- no principled trade-off exists
+  \item We formalize Occam's razor: prefer explanations that are (i) concise \emph{and} (ii) predictive
 \end{itemize}
 \end{block}
 
-\begin{block}{Problem Setup}
+\begin{block}{MDL Framework}
 \justifying
-Define the setting, assumptions, or notation.
+An explanation $z$ is a natural-language model of dataset $x$. A frozen evaluator LLM $p^*$ scores $z$ using a two-part code:
 
 \begin{equation}
-\mathcal{L}(\theta) = \sum_{i=1}^{N} \ell(f_{\theta}(x_i), y_i)
+\mathrm{MDL}(z, x) = \underbrace{-\log p^*(z)}_{\text{explanation complexity}} + \underbrace{-\log p^*(x \mid z)}_{\text{data complexity given } z}
 \end{equation}
 
+\textbf{Bayesian interpretation:} minimizing MDL $\equiv$ maximizing the posterior $p^*(z \mid x)$.
+
 \begin{itemize}
-  \item Input:
-  \item Output:
-  \item Goal:
+  \item $-\log p^*(z)$: penalizes verbose or unlikely explanations --- \emph{simplicity pressure}
+  \item $-\log p^*(x \mid z)$: penalizes explanations that fail to predict data --- \emph{accuracy pressure}
+  \item Mask $m$ restricts likelihood to prediction-relevant tokens only (e.g.\ labels, next-state tokens)
 \end{itemize}
 \end{block}
 
 \begin{block}{Method Overview}
 \justifying
-Summarize your method at a high level. Keep this section scannable.
+Dataset $x$ $\to$ Policy $p_\theta(z|x)$ $\to$ Evaluator $p^*$ $\to$ Reward $R$ $\xrightarrow{\text{RL}}$ update $p_\theta$
 
-\placeholderfigure{10cm}
-
-\begin{enumerate}
-  \item Step one
-  \item Step two
-  \item Step three
-\end{enumerate}
+\begin{itemize}
+  \item \textbf{Policy} $p_\theta$: fine-tuned LLM; the only model updated during training
+  \item \textbf{Evaluator} $p^*$: frozen; computes prior NLL $-\!\log p^*(z)$ and likelihood NLL $-\!\log p^*(x|z)$
+  \item \textbf{Amortized}: once trained, $p_\theta$ generates explanations for new datasets in one forward pass
+\end{itemize}
 \end{block}
 
 \end{column}
@@ -150,56 +145,51 @@ Summarize your method at a high level. Keep this section scannable.
 % =============================
 \begin{column}{\colwidth}
 
-\begin{block}{Model / Approach}
+\begin{block}{Reward Signal \& RL Training}
 \justifying
-Describe the core idea more precisely.
-
+A trainable policy $p_\theta(z \mid x)$ proposes explanation $z$; a frozen evaluator $p^*$ scores it:
 \begin{equation}
-p(z \mid x) \propto p(x \mid z)\,p(z)
+R(z, x, m;\, p^*) = -\log p^*(z) - \log p^*(x \mid z)
 \end{equation}
-
-\begin{equation}
-\mathrm{Score}(z, x) = -\log p(z) - \log p(x \mid z)
-\end{equation}
-
-\begin{itemize}
-  \item What is optimized
-  \item What is fixed
-  \item Why the objective is useful
-\end{itemize}
+$p_\theta$ is optimized via REINFORCE/PPO. The frozen $p^*$ prevents reward hacking. \textbf{Planned}: LoRA fine-tuning of Qwen 2.5-7B scored by a larger frozen Qwen instance.
 \end{block}
 
-\begin{block}{Experimental Setup}
+\begin{alertblock}{Proof-of-Concept Scoring (Qwen 2.5-7B)}
 \justifying
-List datasets, baselines, metrics, and implementation details.
+Sequence: $[1, 1, 2, 5, 12, 27, 58, 121, 248, 503]$
 
-\begin{itemize}
-  \item Datasets:
-  \item Baselines:
-  \item Metrics:
-  \item Training details:
-\end{itemize}
-\end{block}
-
-\begin{alertblock}{Main Result}
-\justifying
-Highlight the most important quantitative or qualitative finding here.
-
-\placeholderfigure{12cm}
-\end{alertblock}
-
-\begin{block}{Results Table}
 \begin{center}
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Method & Metric 1 $\downarrow$ & Metric 2 $\uparrow$ & Time \\
+Explanation & Cond.\ $\downarrow$ & Bayes $\downarrow$ & Prior NLL & Lik.\ NLL \\
 \midrule
-Baseline A & 0.81 & 72.4 & 1.0x \\
-Baseline B & 0.74 & 75.9 & 1.3x \\
-Ours       & \textbf{0.62} & \textbf{81.7} & 1.1x \\
+Generated: $a_n = a_{n-1} + 2a_{n-2}$ & 2.37 & 67.66 & 26.87 & 40.79 \\
+Concise: $2^n - n$                      & 39.35 & 81.97 & 64.26 & 17.71 \\
+Dummy: repeat sequence                 & 63.88 & 106.50 & 106.50 & 0.00 \\
+False: $3n + 1$                         & 42.27 & 120.29 & 61.05 & 59.24 \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\begin{itemize}
+  \item Bayesian scoring penalizes the \textbf{dummy} explanation via high prior NLL; conditional loss alone cannot distinguish it
+  \item Generated rule achieves the best conditional score: LLM assigns it high probability given the sequence
+  \item Bayesian prior correctly exposes the ``repeat sequence'' trivial explanation
+\end{itemize}
+\end{alertblock}
+
+\begin{block}{Experimental Setup}
+\justifying
+
+\textbf{Dataset A --- WorldLLM} \cite{levy2025}\\
+Procedurally generated environments (BabyAI, Minigrid). Mask targets next-state transition tokens.\\
+Input: $\langle$state, action$\rangle$ \quad Output: \texttt{[PREDICTION TARGET]}
+
+\panelspace
+
+\textbf{Dataset B --- AutoDiscovery} \cite{autodiscovery2025}\\
+21 real-world datasets (biology, economics, finance, behavioural science). Mask targets output variable.\\
+Input: row with variables $(v_1{=}{\ldots},\, v_2{=}{\ldots},\, \ldots)$ \quad Output: \texttt{[PREDICTION TARGET]}
 \end{block}
 
 \end{column}
@@ -211,38 +201,46 @@ Ours       & \textbf{0.62} & \textbf{81.7} & 1.1x \\
 % =============================
 \begin{column}{\colwidth}
 
-\begin{block}{Analysis}
-\justifying
-Use this section for ablations, interpretation, or error analysis.
-
+\begin{block}{Baselines}
 \begin{itemize}
-  \item Ablation one
-  \item Ablation two
-  \item Failure mode or caveat
-\end{itemize}
-
-\placeholderfigure{9cm}
-\end{block}
-
-\begin{block}{Discussion}
-\justifying
-Explain what the results mean and why they matter.
-
-\begin{itemize}
-  \item Practical implication
-  \item Scientific implication
-  \item Limitation
+  \item \textbf{MDL Policy (Ours)}: RL-optimized $p_\theta(z|x)$. Amortized explanation policy. Full two-part MDL code. No retraining on held-out datasets.
+  \item \textbf{Standard ICL}: No explicit explanation. Predictions conditioned on in-context training examples. One-part sequential code.
+  \item \textbf{Monte Carlo Search}: Sample / search candidate explanations; score with same MDL objective; no learned policy; per-dataset search.
 \end{itemize}
 \end{block}
 
-\begin{block}{Conclusion}
+\begin{block}{Planned Experiments \& Results}
 \justifying
-Summarize the contribution in a few lines.
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Metric & MDL Policy & ICL & Monte Carlo \\
+\midrule
+Training Compression $\downarrow$ & \multicolumn{3}{c}{\emph{[results pending]}} \\
+Held-out Generalization $\downarrow$ & & & \\
+Explanation Length $\downarrow$ & & & \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{block}
 
+\begin{block}{Related Work}
 \begin{itemize}
-  \item Main contribution
-  \item Main empirical finding
-  \item Future direction
+  \item \textbf{Singh et al.\ (2023)} \cite{singh2023} --- iPrompt: iterative prompt search for input-output mappings. Not MDL-grounded; per-dataset.
+  \item \textbf{Ellis (2023)} \cite{ellis2023} --- Bayesian inference over NL hypotheses with LLM prior + likelihood. We extend to an amortized RL policy.
+  \item \textbf{Hu et al.\ (2023)} \cite{hu2023} --- Amortized inference for latent text posteriors via RL.
+  \item \textbf{Levy et al.\ (2025)} \cite{levy2025} --- WorldLLM (Dataset A); Monte Carlo search baseline.
+  \item \textbf{Agarwal et al.\ (2026)} \cite{autodiscovery2025} --- AutoDiscovery (Dataset B).
+\end{itemize}
+\end{block}
+
+\begin{block}{Conclusions \& Future Work}
+\begin{itemize}
+  \item We propose an \textbf{MDL framework} for linguistic explanation discovery: a two-part code jointly measures simplicity and predictive power
+  \item Proof-of-concept results confirm Bayesian scoring penalizes trivial and false explanations more reliably than conditional scoring alone
+  \item \textbf{Amortized RL} training enables the policy to generalize across datasets, avoiding expensive per-dataset search at test time
+  \item \textbf{Immediate next step}: LoRA REINFORCE training of Qwen 2.5-7B under the Bayesian reward, with full evaluation on Datasets A and B
+  \item \textbf{Future}: multi-modal data, hierarchical explanations, human-in-the-loop evaluation of interpretability
 \end{itemize}
 \end{block}
 
@@ -253,9 +251,9 @@ Summarize the contribution in a few lines.
 
 \begin{alertblock}{Contact}
 \small
-Name Surname\\
-email@university.edu\\
-lab / website / QR code
+Yassine Meliani \textbf{·} \texttt{yassine.meliani@mail.mcgill.ca}\\
+George Kontorousis \textbf{·} \texttt{george.kontorousis@mail.mcgill.ca}\\
+Eric Elmoznino \textbf{·} \texttt{eric.elmoznino@mila.quebec}
 \end{alertblock}
 
 \end{column}
