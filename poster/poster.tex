@@ -74,41 +74,16 @@
 
 \begin{column}{\colwidth}
 
-  \begin{alertblock}{Overview}
-    We use a Minimum Description Length (MDL) framework, grounded in Occam's razor, 
-    to discover a natural-language explanation $z$ for observed data $x$ that is both 
-    concise and predictive. A frozen LLM scores candidate explanations, and this signal
-    is used to train an explanation policy via reinforcement learning. 
-    Our goal is an amortized system that can generate useful explanations for new datasets 
-    without hand-crafted prompts.
-  \end{alertblock}
+  % \begin{alertblock}{Overview}
+  %   We use a Minimum Description Length (MDL) framework, grounded in Occam's razor, 
+  %   to discover a natural-language explanation $z$ for observed data $x$ that is both 
+  %   concise and predictive. A frozen LLM scores candidate explanations, and this signal
+  %   is used to train an explanation policy via reinforcement learning. 
+  %   Our goal is an amortized system that can generate useful explanations for new datasets 
+  %   without hand-crafted prompts.
+  % \end{alertblock}
 
-  % \begin{block}{Motivation}
-
-  %   If prompts are viewed as natural-language models, then
-  %   explanation discovery should not be treated as prompt
-  %   tinkering alone. We want a system that can automatically
-  %   identify explanations that capture the underlying pattern
-  %   in the data rather than merely restating the observations.
-  
-  %   % \begin{figure}
-  %   %   \centering
-  %   %   \begin{tikzpicture}[scale=6]
-  %   %     \draw[step=0.25cm,color=gray] (-1,-1) grid (1,1);
-  %   %     \draw (1,0) -- (0.2,0.2) -- (0,1) -- (-0.2,0.2) -- (-1,0)
-  %   %       -- (-0.2,-0.2) -- (0,-1) -- (0.2,-0.2) -- cycle;
-  %   %   \end{tikzpicture}
-  %   %   \caption{A figure caption.}
-  %   % \end{figure}
-  
-  %   This requires balancing two competing goals: explanations
-  %   should be simple enough to remain interpretable, but strong
-  %   enough to predict the data well. That trade-off motivates
-  %   our use of the Minimum Description Length principle.
-  
-  % \end{block}
-
-  \begin{block}{Motivation}
+\begin{block}{Motivation \& MDL Principle}
 
 \begin{center}
 \includegraphics[width=0.45\linewidth]{poster/resources/plot_good_fit.png}
@@ -118,12 +93,12 @@
 
 \smallskip
 
-\textbf{Which model is a better explanation of the data?}
+\textbf{Which explanation would you trust?}
 
 \smallskip
 
 Most people prefer the simple quadratic fit (left) over the
-highly complex curve (right), even though both can match the data.
+highly complex curve (right), even though both match the data.
 
 \smallskip
 
@@ -132,81 +107,30 @@ prefer explanations that are both simple and predictive.
 
 \smallskip
 
-This intuition is captured by the Minimum Description Length (MDL)
-principle:
+\textbf{But language models do not explicitly optimize for this.}
+They favor explanations that are \emph{likely to be said}, not
+necessarily those that best explain the data.
+
+\smallskip
+
+We formalize this intuition using the \textbf{Minimum Description Length (MDL)}
+principle, selecting an explanation $z$ that minimizes:
 
 \begin{equation*}
-\mathcal{L}(z, x) = -\log p(z) - \log p(x \mid z)
+\mathcal{L}_{\mathrm{MDL}}(z, x)
+=
+\underbrace{-\log p^*(z)}_{\text{complexity}}
++
+\underbrace{-\log p^*(x \mid z)}_{\text{data fit}}
 \end{equation*}
 
 \begin{itemize}
-  \item $-\log p(z)$: complexity of the explanation
-  \item $-\log p(x \mid z)$: how well it fits the data
+  \item Simple explanations $\rightarrow$ lower complexity cost
+  \item Predictive explanations $\rightarrow$ lower data cost
+  \item Best explanation $\rightarrow$ shortest total description
 \end{itemize}
 
-\textbf{Goal:} find explanations that balance simplicity and accuracy.
-
 \end{block}
-
-  \begin{block}{Minimum Description Length Framework}
-
-    We model explanation discovery as selecting a natural-language
-    hypothesis $z$ that gives the shortest description of the
-    observed data $x$. The total score is a two-part code:
-  
-    \begin{equation*}
-      \mathcal{L}_{\mathrm{MDL}}(z, x)
-      =
-      \underbrace{-\log p^*(z)}_{\text{cost of describing } z}
-      +
-      \underbrace{-\log p^*(x \mid z)}_{\text{cost of describing } x \text{ given } z}
-    \end{equation*}
-
-    \begin{itemize}
-      \item Short explanations get a lower prior cost.
-      \item Predictive explanations get a lower conditional data cost.
-      \item The best explanation is the one that minimizes the
-      total description length.
-    \end{itemize}
-  
-  \end{block}
-
-  % \begin{block}{Method}
-
-  %   Starting from a pretrained language model, we instantiate
-  %   two copies: a frozen evaluator $p^*$ and a trainable policy
-  %   $\pi_\theta(z \mid x)$ obtained by LoRA adaptation. Given
-  %   observed data $x$, the policy samples a candidate explanation
-  %   $z$, and the frozen evaluator scores it with an MDL-style reward
-  
-  %   \begin{equation*}
-  %     R(z, x) = \lambda \log p^*(z) + \log p^*(x \mid z),
-  %   \end{equation*}
-  
-  %   where the first term favors concise explanations under the
-  %   model prior and the second favors explanations that make the
-  %   observed data likely. In our implementation, $p^*(x \mid z)$
-  %   is computed by conditioning on the candidate explanation and
-  %   evaluating the likelihood of the observed target sequence.
-  %   The policy is optimized with REINFORCE:
-  %   \begin{equation*}
-  %     \mathcal{L}_{\mathrm{policy}}
-  %     = -(R-b)\log \pi_\theta(z \mid x),
-  %   \end{equation*}
-  %   where $b$ is a moving-average baseline used to reduce gradient
-  %   variance.
-  
-  %   The key idea is to learn an \emph{amortized} explanation policy
-  %   while keeping the scoring model fixed. This preserves a stable
-  %   MDL objective, reduces reward drift, and contrasts with
-  %   per-dataset hypothesis search.
-  % \end{block}
-\end{column}
-
-\separatorcolumn
-
-
-\begin{column}{\colwidth}
 
 \begin{block}{Method}
 
@@ -237,197 +161,197 @@ principle:
   simplicity and predictive accuracy under a fixed evaluator.
 
 \end{block}
-    \begin{exampleblock}{Prompt Templates}
+
+\begin{block}{Guess the Loss!}
+
+\small
+
+Rank the explanations from \textbf{lowest MDL loss} (best) to highest.
+
+\vspace{0.4em}
+
+\textbf{Sequence A:} \\
+$1, 1, 2, 5, 12, 27, 58, 121, \dots$
+
+\begin{enumerate}
+  \item $2^n - n$
+  \item $a_n = a_{n-1} + a_{n-2}$
+  \item \texttt{the pattern is [1, 1, 2, 5, 12, 27, 58, 121]}
+\end{enumerate}
+
+\vspace{0.5em}
+
+\textbf{Sequence B:} \\
+$6, 7, 13, 20, 33, 53, 86, 139, \dots$
+
+\begin{enumerate}
+  \item $a_n = a_{n-1} + a_{n-2}$
+  \item $a_n = 2n + 5$
+  \item \texttt{the pattern is [6, 7, 13, 20, 33, 53, 86, 139]}
+\end{enumerate}
+
+\vspace{0.6em}
+\hrule
+\vspace{0.4em}
+
+\textbf{Answer (MDL ranking):}
+
+\begin{itemize}
+  \item \textbf{A:} $2^n - n$ $<$ Fibonacci $<$ memorization
+  \item \textbf{B:} Fibonacci $<$ linear $<$ memorization
+\end{itemize}
+
+\textit{MDL prefers explanations that are both simple and predictive,
+and penalizes memorization.}
+
+\end{block}
+
+\end{column}
+
+\separatorcolumn
+
+\begin{column}{\colwidth}
+
+\begin{exampleblock}{Prompt Templates}
+
+  \textbf{System: You are a careful pattern-discovery assistant. 
+  Prefer concise, mathematical rules when possible.}
 
   \vspace{0.5em}
 
   \textbf{Prior term: $\boldsymbol{-\log p(z)}$}
-  
 
+  \smallskip
   \noindent
-  \texttt{System: You are a careful pattern-discovery assistant.}
-  
-  \noindent
-  \texttt{Write a concise natural-language rule for a number sequence.}
-  
-  \noindent
-  \texttt{Return only the rule.}
-  
-
-  \noindent
-  \texttt{User: Write a plausible concise natural-language rule}
-  
-  \noindent
-  \texttt{for a number sequence.}
-  
+  \texttt{User: Write a concise rule for a number sequence.}
 
   \noindent
   \texttt{Assistant: \{z\}}
 
-
+  \vspace{0.6em}
 
   \textbf{Likelihood term: $\boldsymbol{-\log p(x \mid z)}$}
-  
+
   \smallskip
   \noindent
-  \texttt{System: You are a careful sequence predictor. Given a rule,}
-  
-  \noindent
-  \texttt{generate the number sequence implied by that rule.}
-  
-
-  \noindent
   \texttt{User: Rule: \{z\}}
-  
 
   \noindent
-  \texttt{Output EXACTLY the first 10 terms as comma-separated}
-  
-  \noindent
-  \texttt{integers, no spaces, no text.}
-  
+  \texttt{Output EXACTLY the first 10 terms as comma-separated integers.}
 
   \noindent
   \texttt{Assistant: \{x\}}
 
+  \vspace{0.6em}
 
   \textbf{Conditional baseline: $\boldsymbol{-\log p(z \mid x)}$}
-  
 
-  \noindent
-  \texttt{System: You are a careful pattern-discovery assistant.}
-  
-  \noindent
-  \texttt{Given an observed number sequence, propose a concise rule}
-  
-  \noindent
-  \texttt{that generated it.}
-  
+  \smallskip
   \noindent
   \texttt{User: Observed sequence: 1, 1, 2, 5, 12, 27, 58, 121, 248, 503}
-  
 
   \noindent
   \texttt{What is the most likely rule?}
-  
 
   \noindent
   \texttt{Assistant: \{z\}}
 
 \end{exampleblock}
 
-  % \begin{alertblock}{A highlighted block}
+\begin{block}{Training Loop}
 
-  %   This block catches your eye, so \textbf{important stuff} should probably go
-  %   here.
+  \begin{center}
+    \includegraphics[width=0.98\linewidth]{poster/resources/flow.png}
+  \end{center}
 
-  %   Curabitur eu libero vehicula, cursus est fringilla, luctus est. Morbi
-  %   consectetur mauris quam, at finibus elit auctor ac. Aliquam erat volutpat.
-  %   Aenean at nisl ut ex ullamcorper eleifend et eu augue. Aenean quis velit
-  %   tristique odio convallis ultrices a ac odio.
+  \smallskip
 
-  %   \begin{itemize}
-  %     \item \textbf{Fusce dapibus tellus} vel tellus semper finibus. In
-  %       consequat, nibh sed mattis luctus, augue diam fermentum lectus.
-  %     \item \textbf{In euismod erat metus} non ex. Vestibulum luctus augue in
-  %       mi condimentum, at sollicitudin lorem viverra.
-  %     \item \textbf{Suspendisse vulputate} mauris vel placerat consectetur.
-  %       Mauris semper, purus ac hendrerit molestie, elit mi dignissim odio, in
-  %       suscipit felis sapien vel ex.
-  %   \end{itemize}
+  \begin{itemize}
+    \item We generate a synthetic dataset of number sequences $x$ in Python.
+    \item A LoRA-adapted policy $\pi_\theta(z \mid x)$ samples candidate explanations $z$.
+    \item A frozen evaluator $p^*$ scores each explanation using the MDL objective:
+    \[
+      -\log p^*(z) - \log p^*(x \mid z)
+    \]
+    \item The same sampled explanation is also scored under the policy via
+    $\log \pi_\theta(z \mid x)$.
+    \item We combine both terms in a REINFORCE loss to update only the LoRA adapter weights.
+  \end{itemize}
 
-  %   Aenean tincidunt risus eros, at gravida lorem sagittis vel. Vestibulum ante
-  %   ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae.
+\end{block}
 
-  % \end{alertblock}
+\begin{block}{Challenges}
 
-    \begin{block}{Training Loop}
+\begin{itemize}
 
-    \includegraphics[width=1\linewidth]{poster/resources/flow.png}
+  \item \textbf{Likelihood estimation:}  
+  Accurately computing $p(x \mid z)$ is difficult with small LMs.
+  Without chain-of-thought, models struggle with precise reasoning
+  (e.g., arithmetic), leading to noisy likelihood estimates.
 
-  \end{block}
+  \item \textbf{Scaling to natural language:}  
+  On real-world data (e.g., ScienceWorld-style traces), MDL scores
+  become less meaningful. Token-level probabilities are diffuse,
+  and differences outside the top predictions provide weak signal
+  for explanation quality.
 
-  \end{column}
+  \item \textbf{Exploration / discovery:}  
+  Correct explanations often lie in low-probability regions of the
+  model. Policy optimization improves local candidates but rarely
+  discovers the true rule without guidance.
+
+  \item \textbf{Ablation (oracle injection):}  
+  Injecting the correct rule confirms that the reward and update
+  can reinforce it once observed, indicating that the main bottleneck
+  is exploration rather than reward design.
+
+\end{itemize}
+
+\end{block}
+
+\end{column}
 
 \separatorcolumn
 
 \begin{column}{\colwidth}
 
-  \begin{block}{Guess the Loss!}
-
-  \vspace{0.5em}
-
-  \textbf{Sequence A:} \\
-  $1, 1, 2, 5, 12, 27, 58, 121, \dots$
-
-  \begin{enumerate}
-    \item $2^n - n$
-    \item $a_n = a_{n-1} + a_{n-2}$
-    \item \texttt{the pattern is [1, 1, 2, 5, 12, 27, 58, 121]}
-  \end{enumerate}
-
-  \vspace{0.75em}
-
-  \textbf{Sequence B:} \\
-  $6, 7, 13, 20, 33, 53, 86, 139, \dots$
-
-  \begin{enumerate}
-    \item $a_n = a_{n-1} + a_{n-2}$
-    \item $a_n = 2n + 5$
-    \item \texttt{the pattern is [6, 7, 13, 20, 33, 53, 86, 139]}
-  \end{enumerate}
-
-  \vspace{0.75em}
-
-  % \textbf{Sequence C:} \\
-  % $5, 8, 11, 14, 17, 20, 23, 26, \dots$
-
-  % \begin{enumerate}
-  %   \item $a_n = 3n + 5$
-  %   \item $a_n = 2^n$
-  %   \item \texttt{the pattern is [5, 8, 11, 14, 17, 20, 23, 26]}
-  % \end{enumerate}
-
-  % \vspace{0.5em}
-
-  % \textit{Hint: MDL balances simplicity and predictive accuracy.}
-
-\end{block}
 
 
 \begin{block}{Results}
 
 \small
 
-We compare explanation scoring for the sequence
-$(1, 1, 2, 5, 12, 27, 58, 121, 248, 503)$.
+We compare explanations using three scores:
+base-model conditional likelihood, fine-tuned conditional likelihood,
+and frozen-evaluator MDL ($\lambda = 0.3$).
 
 \begin{table}
 \centering
-\scriptsize
-\scalebox{1.4}{
+\renewcommand{\arraystretch}{1.15}
+\scalebox{1.05}{
 \begin{tabular}{l r r r}
 \toprule
-\textbf{Explanation $z$} & \textbf{Cond.} & \textbf{MDL} & \textbf{Prior / Likelihood} \\
+\textbf{Explanation $z$} & \textbf{Base cond.} & \textbf{FT cond.} & \textbf{MDL} \\
 \midrule
-Base model output & 34.56 & 47.87 & 23.62 / 40.79 \\
-Fine-tuned (LoRA) & \textbf{0.23} & \textbf{29.38} & 38.91 / 17.71 \\
+Base model greedy output & \textbf{2.36} & -- & 47.87 \\
+Fine-tuned greedy output & -- & \textbf{0.13} & 38.38 \\
 \midrule
-$2^n - n$ (true rule) & 39.35 & 29.38 & 38.91 / 17.71 \\
-$3n + 1$ (false) & 42.27 & 93.71 & 34.47 / 59.24 \\
-Dummy (copy data) & 63.88 & 95.77 & 95.77 / 0.00 \\
+$2^n - n$ (true rule) & 39.35 & \textbf{0.09} & \textbf{29.38} \\
+Max Likelihood & \textbf{2.36} & 34.56 & 47.87 \\
+Dummy (copy data) & 63.88 & 62.52 & 95.77 \\
 \bottomrule
 \end{tabular}
 }
-\caption{Lower is better.}
+\caption{Lower is better. MDL uses the frozen evaluator. Greedy decoding need not recover the globally lowest conditional-loss explanation.}
 \end{table}
 
 \smallskip
 
 \textbf{Key observation:}
 \begin{itemize}
-  \item Conditional likelihood favors what the model would say.
-  \item MDL favors concise, predictive explanations.
+  \item The base model prefers the max-likelihood recurrence rule.
+  \item After fine-tuning, the policy assigns low conditional loss to the true rule.
+  \item Fine-tuning moves model preference closer to the MDL objective.
 \end{itemize}
 
 \textbf{Training:}
@@ -436,30 +360,68 @@ To improve exploration, we inject the correct rule with small
 probability during sampling.
 
 \smallskip
+\begin{figure}
+\centering
+\includegraphics[width=0.8\linewidth]{poster/resources/plot2.png}
+%\caption{REINFORCE training curve (mean reward per episode)}
+\end{figure}
+\smallskip
 
-After fine-tuning, the model converges to the correct rule
-$2^n - n$, achieving both low MDL loss and high confidence.
+Training exhibits high variance due to stochastic sampling, but converges to a stable reward.
+
+% After fine-tuning, the model converges to the correct rule
+% $2^n - n$, achieving both low MDL loss and high confidence.
 
 \end{block}
 
-  \begin{block}{Conclusion}
+\begin{block}{Before vs After}
 
-  Fine-tuning a language model with an MDL-style reward
-  (via LoRA) shifts it from predicting likely text to
-  generating better explanations.
+\small
 
-  Instead of optimizing only $p(z \mid x)$, the model is
-  encouraged to balance:
-  \begin{itemize}
-    \item plausibility: $p(z)$
-    \item correctness: $p(x \mid z)$
-  \end{itemize}
+\textbf{Observed sequence:} \\
+$(1, 1, 2, 5, 12, 27, 58, 121, 248, 503)$
 
-  This leads to more concise, predictive, and interpretable
-  rules, rather than fluent but incorrect explanations.
+\vspace{0.5em}
 
-  The approach is domain-agnostic and can be applied beyond
-  number sequences to general text-based pattern discovery.
+\begin{columns}
+
+\column{0.48\linewidth}
+
+\textbf{Before (Max Likelihood)}
+
+\smallskip
+\textit{Explanation:} \\
+Each term is the sum of the previous term and twice the term before it.
+
+\smallskip
+\textit{Conditional loss:} 2.36 \\
+\textit{MDL loss:} 46.69
+
+\vspace{0.5em}
+\textcolor{red}{Fluent but incorrect}
+
+\column{0.48\linewidth}
+
+\textbf{After (MDL fine-tuned)}
+
+\smallskip
+\textit{Explanation:} \\
+$2^n - n$
+
+\smallskip
+\textit{Conditional loss:} \textbf{0.23} \\
+\textit{MDL loss:} \textbf{29.38}
+
+\vspace{0.5em}
+\textcolor{green!60!black}{Concise and correct}
+
+\end{columns}
+
+\end{block}
+
+\begin{block}{Conclusion}
+
+MDL-based fine-tuning (via LoRA) shifts LLMs from producing likely text to generating better explanations by balancing plausibility $p(z)$ and predictive accuracy $p(x \mid z)$. This leads to concise, interpretable, and more correct rules, and extends beyond number sequences to general pattern discovery.
 
 \end{block}
 
