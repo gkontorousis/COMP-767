@@ -83,30 +83,70 @@
     without hand-crafted prompts.
   \end{alertblock}
 
+  % \begin{block}{Motivation}
+
+  %   If prompts are viewed as natural-language models, then
+  %   explanation discovery should not be treated as prompt
+  %   tinkering alone. We want a system that can automatically
+  %   identify explanations that capture the underlying pattern
+  %   in the data rather than merely restating the observations.
+  
+  %   % \begin{figure}
+  %   %   \centering
+  %   %   \begin{tikzpicture}[scale=6]
+  %   %     \draw[step=0.25cm,color=gray] (-1,-1) grid (1,1);
+  %   %     \draw (1,0) -- (0.2,0.2) -- (0,1) -- (-0.2,0.2) -- (-1,0)
+  %   %       -- (-0.2,-0.2) -- (0,-1) -- (0.2,-0.2) -- cycle;
+  %   %   \end{tikzpicture}
+  %   %   \caption{A figure caption.}
+  %   % \end{figure}
+  
+  %   This requires balancing two competing goals: explanations
+  %   should be simple enough to remain interpretable, but strong
+  %   enough to predict the data well. That trade-off motivates
+  %   our use of the Minimum Description Length principle.
+  
+  % \end{block}
+
   \begin{block}{Motivation}
 
-    If prompts are viewed as natural-language models, then
-    explanation discovery should not be treated as prompt
-    tinkering alone. We want a system that can automatically
-    identify explanations that capture the underlying pattern
-    in the data rather than merely restating the observations.
-  
-    \begin{figure}
-      \centering
-      \begin{tikzpicture}[scale=6]
-        \draw[step=0.25cm,color=gray] (-1,-1) grid (1,1);
-        \draw (1,0) -- (0.2,0.2) -- (0,1) -- (-0.2,0.2) -- (-1,0)
-          -- (-0.2,-0.2) -- (0,-1) -- (0.2,-0.2) -- cycle;
-      \end{tikzpicture}
-      \caption{A figure caption.}
-    \end{figure}
-  
-    This requires balancing two competing goals: explanations
-    should be simple enough to remain interpretable, but strong
-    enough to predict the data well. That trade-off motivates
-    our use of the Minimum Description Length principle.
-  
-  \end{block}
+\begin{center}
+\includegraphics[width=0.45\linewidth]{poster/resources/plot_good_fit.png}
+\hfill
+\includegraphics[width=0.45\linewidth]{poster/resources/plot_overfit.png}
+\end{center}
+
+\smallskip
+
+\textbf{Which model is a better explanation of the data?}
+
+\smallskip
+
+Most people prefer the simple quadratic fit (left) over the
+highly complex curve (right), even though both can match the data.
+
+\smallskip
+
+\textbf{Why?} We naturally apply \emph{Occam’s razor}:
+prefer explanations that are both simple and predictive.
+
+\smallskip
+
+This intuition is captured by the Minimum Description Length (MDL)
+principle:
+
+\begin{equation*}
+\mathcal{L}(z, x) = -\log p(z) - \log p(x \mid z)
+\end{equation*}
+
+\begin{itemize}
+  \item $-\log p(z)$: complexity of the explanation
+  \item $-\log p(x \mid z)$: how well it fits the data
+\end{itemize}
+
+\textbf{Goal:} find explanations that balance simplicity and accuracy.
+
+\end{block}
 
   \begin{block}{Minimum Description Length Framework}
 
@@ -131,48 +171,150 @@
   
   \end{block}
 
-  \begin{block}{Method}
+  % \begin{block}{Method}
 
-    Starting from a pretrained language model, we instantiate
-    two copies: a frozen evaluator $p^*$ and a trainable policy
-    $\pi_\theta(z \mid x)$ obtained by LoRA adaptation. Given
-    observed data $x$, the policy samples a candidate explanation
-    $z$, and the frozen evaluator scores it with an MDL-style reward
+  %   Starting from a pretrained language model, we instantiate
+  %   two copies: a frozen evaluator $p^*$ and a trainable policy
+  %   $\pi_\theta(z \mid x)$ obtained by LoRA adaptation. Given
+  %   observed data $x$, the policy samples a candidate explanation
+  %   $z$, and the frozen evaluator scores it with an MDL-style reward
   
-    \begin{equation*}
-      R(z, x) = \lambda \log p^*(z) + \log p^*(x \mid z),
-    \end{equation*}
+  %   \begin{equation*}
+  %     R(z, x) = \lambda \log p^*(z) + \log p^*(x \mid z),
+  %   \end{equation*}
   
-    where the first term favors concise explanations under the
-    model prior and the second favors explanations that make the
-    observed data likely. In our implementation, $p^*(x \mid z)$
-    is computed by conditioning on the candidate explanation and
-    evaluating the likelihood of the observed target sequence.
-  \end{block}
+  %   where the first term favors concise explanations under the
+  %   model prior and the second favors explanations that make the
+  %   observed data likely. In our implementation, $p^*(x \mid z)$
+  %   is computed by conditioning on the candidate explanation and
+  %   evaluating the likelihood of the observed target sequence.
+  %   The policy is optimized with REINFORCE:
+  %   \begin{equation*}
+  %     \mathcal{L}_{\mathrm{policy}}
+  %     = -(R-b)\log \pi_\theta(z \mid x),
+  %   \end{equation*}
+  %   where $b$ is a moving-average baseline used to reduce gradient
+  %   variance.
+  
+  %   The key idea is to learn an \emph{amortized} explanation policy
+  %   while keeping the scoring model fixed. This preserves a stable
+  %   MDL objective, reduces reward drift, and contrasts with
+  %   per-dataset hypothesis search.
+  % \end{block}
 \end{column}
 
 \separatorcolumn
 
-\begin{column}{\colwidth}
-  \begin{block}{}
-    The policy is optimized with REINFORCE:
-    \begin{equation*}
-      \mathcal{L}_{\mathrm{policy}}
-      = -(R-b)\log \pi_\theta(z \mid x),
-    \end{equation*}
-    where $b$ is a moving-average baseline used to reduce gradient
-    variance.
-  
-    The key idea is to learn an \emph{amortized} explanation policy
-    while keeping the scoring model fixed. This preserves a stable
-    MDL objective, reduces reward drift, and contrasts with
-    per-dataset hypothesis search.
 
+\begin{column}{\colwidth}
+
+\begin{block}{Method}
+
+  We use a pretrained LLM in two roles:
+  a frozen evaluator $p^*$ and a trainable policy
+  $\pi_\theta(z \mid x)$ (via LoRA).
+
+  Given data $x$, the policy samples an explanation $z$,
+  which is scored by an MDL-style reward:
+  \begin{equation*}
+    R(z, x) = \lambda \log p^*(z) + \log p^*(x \mid z).
+  \end{equation*}
+
+  The first term favors concise explanations,
+  while the second favors explanations that predict the data.
+
+  The policy is optimized with REINFORCE:
+  \begin{equation*}
+    \mathcal{L}
+    = -(R - b)\log \pi_\theta(z \mid x),
+  \end{equation*}
+  where $b$ is a baseline.
+
+  \smallskip
+
+  \textbf{Key idea:}
+  learn a policy that proposes explanations maximizing
+  simplicity and predictive accuracy under a fixed evaluator.
+
+\end{block}
     \begin{exampleblock}{Prompt Templates}
-      \textit{Placeholder: optionally add the prompt templates used for
-      policy generation and evaluator scoring here (Yassine).}
-    \end{exampleblock}
-  \end{block}
+
+  \vspace{0.5em}
+
+  \textbf{Prior term: $\boldsymbol{-\log p(z)}$}
+  
+
+  \noindent
+  \texttt{System: You are a careful pattern-discovery assistant.}
+  
+  \noindent
+  \texttt{Write a concise natural-language rule for a number sequence.}
+  
+  \noindent
+  \texttt{Return only the rule.}
+  
+
+  \noindent
+  \texttt{User: Write a plausible concise natural-language rule}
+  
+  \noindent
+  \texttt{for a number sequence.}
+  
+
+  \noindent
+  \texttt{Assistant: \{z\}}
+
+
+
+  \textbf{Likelihood term: $\boldsymbol{-\log p(x \mid z)}$}
+  
+  \smallskip
+  \noindent
+  \texttt{System: You are a careful sequence predictor. Given a rule,}
+  
+  \noindent
+  \texttt{generate the number sequence implied by that rule.}
+  
+
+  \noindent
+  \texttt{User: Rule: \{z\}}
+  
+
+  \noindent
+  \texttt{Output EXACTLY the first 10 terms as comma-separated}
+  
+  \noindent
+  \texttt{integers, no spaces, no text.}
+  
+
+  \noindent
+  \texttt{Assistant: \{x\}}
+
+
+  \textbf{Conditional baseline: $\boldsymbol{-\log p(z \mid x)}$}
+  
+
+  \noindent
+  \texttt{System: You are a careful pattern-discovery assistant.}
+  
+  \noindent
+  \texttt{Given an observed number sequence, propose a concise rule}
+  
+  \noindent
+  \texttt{that generated it.}
+  
+  \noindent
+  \texttt{User: Observed sequence: 1, 1, 2, 5, 12, 27, 58, 121, 248, 503}
+  
+
+  \noindent
+  \texttt{What is the most likely rule?}
+  
+
+  \noindent
+  \texttt{Assistant: \{z\}}
+
+\end{exampleblock}
 
   % \begin{alertblock}{A highlighted block}
 
@@ -199,135 +341,127 @@
 
   % \end{alertblock}
 
-  \begin{block}{Experimental Setup}
+    \begin{block}{Training Loop}
 
-    Vivamus congue volutpat elit non semper. Praesent molestie nec erat ac
-    interdum. In quis suscipit erat. \textbf{Phasellus mauris felis, molestie
-    ac pharetra quis}, tempus nec ante. Donec finibus ante vel purus mollis
-    fermentum. Sed felis mi, pharetra eget nibh a, feugiat eleifend dolor. Nam
-    mollis condimentum purus quis sodales. Nullam eu felis eu nulla eleifend
-    bibendum nec eu lorem. Vivamus felis velit, volutpat ut facilisis ac,
-    commodo in metus.
-
-    \begin{enumerate}
-      \item \textbf{Morbi mauris purus}, egestas at vehicula et, convallis
-        accumsan orci. Orci varius natoque penatibus et magnis dis parturient
-        montes, nascetur ridiculus mus.
-      \item \textbf{Cras vehicula blandit urna ut maximus}. Aliquam blandit nec
-        massa ac sollicitudin. Curabitur cursus, metus nec imperdiet bibendum,
-        velit lectus faucibus dolor, quis gravida metus mauris gravida turpis.
-      \item \textbf{Vestibulum et massa diam}. Phasellus fermentum augue non
-        nulla accumsan, non rhoncus lectus condimentum.
-    \end{enumerate}
+    \includegraphics[width=1\linewidth]{poster/resources/flow.png}
 
   \end{block}
 
-  \begin{block}{Some Other Title?}
-
-    Et rutrum ex euismod vel. Pellentesque ultricies, velit in fermentum
-    vestibulum, lectus nisi pretium nibh, sit amet aliquam lectus augue vel
-    velit. Suspendisse rhoncus massa porttitor augue feugiat molestie. Sed
-    molestie ut orci nec malesuada. Sed ultricies feugiat est fringilla
-    posuere.
-
-    \begin{figure}
-      \centering
-      \begin{tikzpicture}
-        \begin{axis}[
-            scale only axis,
-            no markers,
-            domain=0:2*pi,
-            samples=100,
-            axis lines=center,
-            axis line style={-},
-            ticks=none]
-          \addplot[red] {sin(deg(x))};
-          \addplot[blue] {cos(deg(x))};
-        \end{axis}
-      \end{tikzpicture}
-      \caption{Another figure caption.}
-    \end{figure}
-
-  \end{block}
-
-  \begin{block}{Results}
-
-    Nulla eget sem quam. Ut aliquam volutpat nisi vestibulum convallis. Nunc a
-    lectus et eros facilisis hendrerit eu non urna...
-
-    \begin{itemize}
-      \item \textbf{Sed consequat} id ante vel efficitur. Praesent congue massa
-        sed est scelerisque, elementum mollis augue iaculis.
-        \begin{itemize}
-          \item In sed est finibus, vulputate
-            nunc gravida, pulvinar lorem. In maximus nunc dolor, sed auctor eros
-            porttitor quis.
-          \item Fusce ornare dignissim nisi. Nam sit amet risus vel lacus
-            tempor tincidunt eu a arcu.
-          \item Donec rhoncus vestibulum erat, quis aliquam leo
-            gravida egestas.
-        \end{itemize}
-    \end{itemize}
-
-  \end{block}
-
-\end{column}
+  \end{column}
 
 \separatorcolumn
 
 \begin{column}{\colwidth}
 
-  \begin{exampleblock}{A highlighted block containing some math}
+  \begin{block}{Guess the Loss!}
 
-    A different kind of highlighted block.
+  \vspace{0.5em}
 
-    $$
-    \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
-    $$
+  \textbf{Sequence A:} \\
+  $1, 1, 2, 5, 12, 27, 58, 121, \dots$
 
-    Interdum et malesuada fames $\{1, 4, 9, \ldots\}$...
+  \begin{enumerate}
+    \item $2^n - n$
+    \item $a_n = a_{n-1} + a_{n-2}$
+    \item \texttt{the pattern is [1, 1, 2, 5, 12, 27, 58, 121]}
+  \end{enumerate}
 
-    \heading{A heading inside a block}
+  \vspace{0.75em}
 
-    Praesent consectetur mi $x^2 + y^2$ metus...
+  \textbf{Sequence B:} \\
+  $6, 7, 13, 20, 33, 53, 86, 139, \dots$
 
-  \end{exampleblock}
+  \begin{enumerate}
+    \item $a_n = a_{n-1} + a_{n-2}$
+    \item $a_n = 2n + 5$
+    \item \texttt{the pattern is [6, 7, 13, 20, 33, 53, 86, 139]}
+  \end{enumerate}
 
-  \begin{block}{Discussion}
+  \vspace{0.75em}
 
-    Class aptent taciti sociosqu ad litora torquent per conubia nostra, per
-    inceptos himenaeos. Phasellus libero enim, gravida sed erat sit amet,
-    scelerisque congue diam. Fusce dapibus dui ut augue pulvinar iaculis.
+  % \textbf{Sequence C:} \\
+  % $5, 8, 11, 14, 17, 20, 23, 26, \dots$
 
-    \begin{table}
-      \centering
-      \begin{tabular}{l r r c}
-        \toprule
-        \textbf{First column} & \textbf{Second column} & \textbf{Third column} & \textbf{Fourth} \\
-        \midrule
-        Foo & 13.37 & 384,394 & $\alpha$ \\
-        Bar & 2.17 & 1,392 & $\beta$ \\
-        Baz & 3.14 & 83,742 & $\delta$ \\
-        Qux & 7.59 & 974 & $\gamma$ \\
-        \bottomrule
-      \end{tabular}
-      \caption{A table caption.}
-    \end{table}
+  % \begin{enumerate}
+  %   \item $a_n = 3n + 5$
+  %   \item $a_n = 2^n$
+  %   \item \texttt{the pattern is [5, 8, 11, 14, 17, 20, 23, 26]}
+  % \end{enumerate}
 
-    Donec quis posuere ligula. Nunc feugiat elit a mi malesuada consequat. Sed
-    imperdiet augue ac nibh aliquet tristique. Aenean eu tortor vulputate...
+  % \vspace{0.5em}
 
-  \end{block}
+  % \textit{Hint: MDL balances simplicity and predictive accuracy.}
+
+\end{block}
+
+
+\begin{block}{Results}
+
+\small
+
+We compare explanation scoring for the sequence
+$(1, 1, 2, 5, 12, 27, 58, 121, 248, 503)$.
+
+\begin{table}
+\centering
+\scriptsize
+\scalebox{1.4}{
+\begin{tabular}{l r r r}
+\toprule
+\textbf{Explanation $z$} & \textbf{Cond.} & \textbf{MDL} & \textbf{Prior / Likelihood} \\
+\midrule
+Base model output & 34.56 & 47.87 & 23.62 / 40.79 \\
+Fine-tuned (LoRA) & \textbf{0.23} & \textbf{29.38} & 38.91 / 17.71 \\
+\midrule
+$2^n - n$ (true rule) & 39.35 & 29.38 & 38.91 / 17.71 \\
+$3n + 1$ (false) & 42.27 & 93.71 & 34.47 / 59.24 \\
+Dummy (copy data) & 63.88 & 95.77 & 95.77 / 0.00 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Lower is better.}
+\end{table}
+
+\smallskip
+
+\textbf{Key observation:}
+\begin{itemize}
+  \item Conditional likelihood favors what the model would say.
+  \item MDL favors concise, predictive explanations.
+\end{itemize}
+
+\textbf{Training:}
+We fine-tune a LoRA policy using REINFORCE with an MDL reward.
+To improve exploration, we inject the correct rule with small
+probability during sampling.
+
+\smallskip
+
+After fine-tuning, the model converges to the correct rule
+$2^n - n$, achieving both low MDL loss and high confidence.
+
+\end{block}
 
   \begin{block}{Conclusion}
 
-    Class aptent taciti sociosqu ad litora torquent per conubia nostra, per
-    inceptos himenaeos. Phasellus libero enim, gravida sed erat sit amet,
-    scelerisque congue diam. Fusce dapibus dui ut augue pulvinar iaculis.
-    Donec quis posuere ligula. Nunc feugiat elit a mi malesuada consequat. Sed
-    imperdiet augue ac nibh aliquet tristique. Aenean eu tortor vulputate...
+  Fine-tuning a language model with an MDL-style reward
+  (via LoRA) shifts it from predicting likely text to
+  generating better explanations.
 
-  \end{block}
+  Instead of optimizing only $p(z \mid x)$, the model is
+  encouraged to balance:
+  \begin{itemize}
+    \item plausibility: $p(z)$
+    \item correctness: $p(x \mid z)$
+  \end{itemize}
+
+  This leads to more concise, predictive, and interpretable
+  rules, rather than fluent but incorrect explanations.
+
+  The approach is domain-agnostic and can be applied beyond
+  number sequences to general text-based pattern discovery.
+
+\end{block}
 
   \begin{block}{References}
 
