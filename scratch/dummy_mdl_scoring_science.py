@@ -1,3 +1,6 @@
+import argparse
+from pathlib import Path
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -188,8 +191,94 @@ def print_likelihood_ranking(results):
         )
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model-name",
+        default="Qwen/Qwen3-14B-Base",
+        help=(
+            "Model identifier. If --model-path is set, this should be the subdirectory "
+            "name under that folder (e.g. Qwen3-14B-Base). If --model-path is not set, "
+            "this is passed directly to from_pretrained (often a Hub repo id)."
+        ),
+    )
+    parser.add_argument(
+        "--model-path",
+        default=None,
+        help=(
+            "Optional parent directory of locally downloaded models. The resolved model "
+            "directory is MODEL_PATH / MODEL_NAME."
+        ),
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional Hugging Face cache directory.",
+    )
+    parser.add_argument(
+        "--local-files-only",
+        action="store_true",
+        help="Load model/tokenizer only from local files instead of the network.",
+    )
+    return parser.parse_args()
+
+
+def load_model_and_tokenizer(args, dtype, device):
+    if args.model_path is not None:
+        if ("/" in args.model_name) or ("\\" in args.model_name):
+            raise ValueError(
+                "When --model-path is set, --model-name must be a single folder name "
+                f"(no path separators). Got: {args.model_name!r}"
+            )
+        model_source = str(Path(args.model_path).expanduser().resolve() / args.model_name)
+    else:
+        model_source = args.model_name
+
+    load_kwargs = {
+        "trust_remote_code": True,
+        "local_files_only": args.local_files_only,
+    }
+    if args.cache_dir is not None:
+        load_kwargs["cache_dir"] = args.cache_dir
+
+    print(f"Model source: {model_source}")
+    if args.model_path is not None:
+        print(f"Models root: {args.model_path}")
+        print(f"Model folder: {args.model_name}")
+    print(f"Local files only: {args.local_files_only}")
+    if args.cache_dir is not None:
+        print(f"Cache dir: {args.cache_dir}")
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_source, **load_kwargs)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            torch_dtype=dtype,
+            device_map="auto" if torch.cuda.is_available() else None,
+            **load_kwargs,
+        )
+    except OSError as exc:
+        hint_lines = [
+            "",
+            "Model loading failed.",
+            "If this is running on Narval, the compute node likely has no outbound network access.",
+            "Use one of these options:",
+            "1. Pre-download the model on a login node or other machine with internet access.",
+            "2. Pass --model-path to the parent folder and --model-name to the per-model folder.",
+            "3. Re-run with --local-files-only so transformers does not try the network.",
+            "4. If you use a cache, point --cache-dir at the same cache location.",
+        ]
+        raise RuntimeError("\n".join(hint_lines)) from exc
+
+    if not torch.cuda.is_available():
+        model = model.to(device)
+
+    model.eval()
+    return tokenizer, model
+
+
 def main():
-    model_name = "Qwen/Qwen2.5-7B"
+    args = parse_args()
 
     full_trace = """
 Task Description: Your task is to change the state of matter of water. First, focus on the substance. Then, take actions that will cause it to change its state of matter.
@@ -346,18 +435,9 @@ You decide to wait for 1 iterations. (Task Completed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=dtype,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
-
-    if not torch.cuda.is_available():
-        model = model.to(device)
-
-    model.eval()
+    print(f"Using device: {device}")
+    print(f"Requested model name: {args.model_name}")
+    tokenizer, model = load_model_and_tokenizer(args, dtype, device)
 
     observed_task, observed_rollout = split_task_and_rollout(full_trace)
     actions = extract_actions_from_rollout(observed_rollout)

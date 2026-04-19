@@ -1,6 +1,7 @@
 import argparse
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from statistics import mean
 
 import torch
@@ -19,6 +20,17 @@ Why this file exists:
 
 This makes it easier to test whether a good explanation lowers answer loss
 relative to generic or incorrect explanations before we invest in RL.
+
+Logging note:
+- This script prints to stdout/stderr normally.
+- On Slurm, capture logs with `#SBATCH --output` / `#SBATCH --error` (recommended),
+  or redirect at the shell level (`python ... > log.txt 2>&1`).
+
+Model loading note:
+- `--model-path` is treated as a *parent directory* that contains one folder per model.
+- The specific model folder name comes from `--model-name` (e.g. `Qwen2.5-7B`).
+- If `--model-path` is not set, `--model-name` is passed straight to `from_pretrained`
+  (so it can still be a Hugging Face repo id like `Qwen/Qwen2.5-7B` when you have network).
 """
 
 
@@ -49,6 +61,7 @@ def continuation_nll_and_token_count(model, tokenizer, prefix: str, continuation
         add_special_tokens=False,
         return_tensors="pt",
     ).input_ids.to(device)
+    
 
     with torch.no_grad():
         outputs = model(full_ids)
@@ -365,41 +378,113 @@ def print_aggregate_summary(all_results):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", default="Qwen/Qwen2.5-7B")
+    parser.add_argument(
+        "--model-name",
+        default="Qwen2.5-7B",
+        help=(
+            "Model identifier. If --model-path is set, this should be the subdirectory "
+            "name under that folder (e.g. Qwen2.5-7B). If --model-path is not set, this "
+            "is passed directly to from_pretrained (often a Hub repo id)."
+        ),
+    )
+    parser.add_argument(
+        "--model-path",
+        default=None,
+        help=(
+            "Optional parent directory of locally downloaded models. The resolved model "
+            "directory is MODEL_PATH / MODEL_NAME."
+        ),
+    )
     parser.add_argument(
         "--max-examples",
         type=int,
         default=None,
         help="Optional cap for a faster smoke test.",
     )
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional Hugging Face cache directory.",
+    )
+    parser.add_argument(
+        "--local-files-only",
+        action="store_true",
+        help="Load model/tokenizer only from local files instead of the network.",
+    )
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
+def load_model_and_tokenizer(args, dtype, device):
+    if args.model_path is not None:
+        if ("/" in args.model_name) or ("\\" in args.model_name):
+            raise ValueError(
+                "When --model-path is set, --model-name must be a single folder name "
+                f"(no path separators). Got: {args.model_name!r}"
+            )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+        model_dir = Path(args.model_path).expanduser().resolve() / args.model_name
+        model_source = str(model_dir)
+    else:
+        model_source = args.model_name
+    load_kwargs = {
+        "trust_remote_code": True,
+        "local_files_only": args.local_files_only,
+    }
+    if args.cache_dir is not None:
+        load_kwargs["cache_dir"] = args.cache_dir
 
-    print(f"Using device: {device}")
-    print(f"Loading model: {args.model_name}")
+    print(f"Model source: {model_source}")
+    if args.model_path is not None:
+        print(f"Models root: {args.model_path}")
+        print(f"Model folder: {args.model_name}")
+    print(f"Local files only: {args.local_files_only}")
+    if args.cache_dir is not None:
+        print(f"Cache dir: {args.cache_dir}")
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        torch_dtype=dtype,
-        device_map="auto" if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_source,
+            **load_kwargs,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            torch_dtype=dtype,
+            device_map="auto" if torch.cuda.is_available() else None,
+            **load_kwargs,
+        )
+    except OSError as exc:
+        hint_lines = [
+            "",
+            "Model loading failed.",
+            "If this is running on Narval, the compute node likely has no outbound network access.",
+            "Use one of these options:",
+            "1. Pre-download the model on a login node or other machine with internet access.",
+            "2. Pass --model-path to the parent folder and --model-name to the per-model folder.",
+            "3. Re-run with --local-files-only so transformers does not try the network.",
+            "4. If you use a cache, point --cache-dir at the same cache location.",
+        ]
+        raise RuntimeError("\n".join(hint_lines)) from exc
 
     if not torch.cuda.is_available():
         model = model.to(device)
 
     model.eval()
+    return tokenizer, model
+
+
+def run_evaluation(args):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+
+    print(f"Using device: {device}")
+    print(f"Requested model name: {args.model_name}")
+    tokenizer, model = load_model_and_tokenizer(args, dtype, device)
 
     examples = build_examples()
     if args.max_examples is not None:
         examples = examples[: args.max_examples]
+
+    print(f"Number of examples: {len(examples)}")
 
     all_results = []
     for example in examples:
@@ -408,6 +493,18 @@ def main():
         print_example_results(example, results)
 
     print_aggregate_summary(all_results)
+
+
+def main():
+    args = parse_args()
+    print("dummy_scoring_new_dataset.py")
+    print(f"Model name: {args.model_name}")
+    print(f"Model path: {args.model_path}")
+    print(f"Cache dir: {args.cache_dir}")
+    print(f"Local files only: {args.local_files_only}")
+    print(f"Max examples: {args.max_examples}")
+    print("-" * 80)
+    run_evaluation(args)
 
 
 if __name__ == "__main__":
