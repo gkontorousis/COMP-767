@@ -1,11 +1,19 @@
-# Python 3.10–3.12. Pins are chosen to install on Linux (incl. Narval) and macOS.
-# Intel macOS x86_64: PyPI only publishes torch up to 2.2.x; newer torch wheels are not published for that platform.
-# On GPU servers you may optionally upgrade torch after `pip install -r requirements.txt` (see setup_canadacompute.md).
-# NumPy 2.x can break torch 2.2 wheels built against NumPy 1.x.
-numpy==1.26.4
-torch==2.2.2
-transformers==4.44.2
-accelerate==0.34.2
-sentencepiece==0.2.0
-peft==0.12.0
-matplotlib==3.9.2
+# Python 3.10–3.12. Versions are lower-bounded for the RL / HF stack used in
+# training.ipynb and training.py; upper caps avoid surprise major upgrades.
+#
+# Intel macOS x86_64: PyPI may not ship the newest torch wheels; if install
+# fails, pin torch manually (e.g. torch==2.2.2) per setup_canadacompute.md.
+# NumPy 2.x is fine with recent torch; torch 2.2.x wheels often need numpy<2.
+# If you upgrade torch (e.g. on GPU servers), you can relax this to numpy>=1.26.
+numpy>=1.26,<2
+torch>=2.2,<3
+transformers>=4.44,<5
+accelerate>=0.34,<1
+sentencepiece>=0.2.0
+peft>=0.12,<0.18
+matplotlib>=3.8,<4
+safetensors>=0.4
+
+# training.ipynb: VS Code needs ipykernel; classic Jupyter needs notebook.
+ipykernel>=6.29
+notebook>=7.2,<8
