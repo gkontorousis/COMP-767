@@ -1,13 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-# USE OF JUPYTER LAB TO 'SAVE AND EXPORT AS EXECUTABLE SCRIPT' FROM training.ipynb notebook file
-
-# ## Environment Setup
-# Load dependencies and initialize shared components.
-
-# In[1]:
-
-
 from pathlib import Path
 import os
 import torch
@@ -54,12 +44,6 @@ generate_explanation = mdl_methods.generate_explanation
 score_explanation = mdl_methods.score_explanation
 
 
-# ## Single-Sequence Generation
-# Generate an explanation for one observed sequence.
-
-# In[2]:
-
-
 model, tokenizer = load_model_and_tokenizer(MODEL_NAME)
 
 explanation = generate_explanation(model, tokenizer, OBSERVED_SEQUENCE)
@@ -82,8 +66,6 @@ print(f"likelihood_nll: {score_bayesian['likelihood_nll']:.4f}")
 
 
 
-# In[3]:
-
 
 OBSERVED_SEQUENCE = [1, 1, 2, 5, 12, 27, 58, 121, 248, 503]
 concise_explanation = "2^n - n"
@@ -91,12 +73,6 @@ concise_explanation_ling = "Each term is 2 to the power of its index, minus its 
 dummy_explanation = f"the pattern is {OBSERVED_SEQUENCE}"
 false_explanation = "3*n + 1"
 max_likelihood_loss = explanation
-
-
-# ## Scoring and Baselines
-# Compare concise vs. generated explanations and inspect scoring behavior.
-
-# In[ ]:
 
 
 explanations_to_score = {
@@ -122,7 +98,6 @@ for name, explanation in explanations_to_score.items():
     print(f"likelihood_nll: {score_bayesian['likelihood_nll']:.4f}")
 
 
-# In[ ]:
 
 
 import torch
@@ -146,7 +121,6 @@ baseline = None
 NUM_EPISODES = 50
 SAMPLES_PER_EPISODE = 4
 
-# add before the loop
 reward_history = []
 
 _episode_pbar = tqdm(range(NUM_EPISODES), desc="REINFORCE", unit="ep")
@@ -201,7 +175,6 @@ for episode in _episode_pbar:
     # print("advantages:", (rewards - baseline).tolist())
 
 
-# In[ ]:
 
 
 import matplotlib.pyplot as plt
@@ -216,11 +189,6 @@ plt.grid(True)
 plt.savefig("reward_curve.png")
 plt.close()
 
-
-# ## Policy Model Check
-# Run policy-model generation and conditional scoring checks.
-
-# In[ ]:
 
 
 # base_model: original unfine-tuned model
@@ -298,7 +266,6 @@ print(f"likelihood_nll: {dummy_score['likelihood_nll']:.4f}")
 
 
 
-# In[ ]:
 
 
 explanation = generate_explanation(policy_model, tokenizer, OBSERVED_SEQUENCE)
@@ -320,7 +287,6 @@ print(f"prior_nll: {score_bayesian['prior_nll']:.4f}")
 print(f"likelihood_nll: {score_bayesian['likelihood_nll']:.4f}")
 
 
-# In[ ]:
 
 
 import gc
@@ -355,14 +321,6 @@ if torch.cuda.is_available():
 if torch.backends.mps.is_available():
     torch.mps.empty_cache()
 
-
-# In[ ]:
-
-
-# ## Multi-Data Training
-# Train/evaluate on multiple generated datasets.
-
-# In[ ]:
 
 
 import random
@@ -411,17 +369,6 @@ if TRAIN_DATA:
     print(f"TRAIN_DATA sample: sequence={sample_sequence}, rule={sample_rule}")
 
 
-
-# =========================
-# Assumes you already have these from your earlier code:
-# - load_model_and_tokenizer
-# - render_chat
-# - continuation_nll
-# - build_conditional_prefix
-# - build_prior_prefix
-# - build_likelihood_prefix
-# - score_explanation(model, tokenizer, observed_sequence, explanation, "bayes", lambda_prior)
-# =========================
 
 # =========================
 # Init models
