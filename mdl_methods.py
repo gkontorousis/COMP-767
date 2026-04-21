@@ -239,11 +239,11 @@ def policy_logprob(model, prompt_ids, gen_ids):
     full_ids = torch.cat([prompt_ids, gen_ids], dim=1)
 
     outputs = model(full_ids)
-    logits = outputs.logits[:, :-1, :].float()
-    labels = full_ids[:, 1:]
-
-    log_probs = torch.log_softmax(logits, dim=-1)
-    token_log_probs = log_probs.gather(2, labels.unsqueeze(-1)).squeeze(-1)
-
     start = prompt_ids.shape[1] - 1
-    return token_log_probs[:, start:].sum()
+    # Keep original log-softmax/gather scoring, but restrict to continuation
+    # tokens so we do not allocate prompt-length vocab tensors.
+    cont_logits = outputs.logits[:, start:-1, :]
+    cont_labels = full_ids[:, start + 1 :]
+    cont_log_probs = torch.log_softmax(cont_logits, dim=-1)
+    cont_token_log_probs = cont_log_probs.gather(2, cont_labels.unsqueeze(-1)).squeeze(-1)
+    return cont_token_log_probs.sum()
