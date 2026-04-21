@@ -213,7 +213,8 @@ plt.xlabel("Episode")
 plt.ylabel("Mean Reward")
 plt.title("REINFORCE Reward Curve")
 plt.grid(True)
-plt.show()
+plt.savefig("reward_curve.png")
+plt.close()
 
 
 # ## Policy Model Check
@@ -356,9 +357,6 @@ if torch.backends.mps.is_available():
 
 
 # In[ ]:
-
-
-get_ipython().system('nvidia-smi')
 
 
 # ## Multi-Data Training
