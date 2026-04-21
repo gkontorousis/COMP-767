@@ -6,6 +6,8 @@ This repository contains code and artifacts for sequence-rule learning experimen
 
 - `training.ipynb`  
   Main notebook used for experiments. It contains the core training loop, evaluation flow, baseline comparison setup, and artifact export.
+- `training.py`
+  Executable script version of the `training.ipynb` notebook converted with Jupyter Lab
 
 - `mdl_methods.py`  
   Shared MDL-oriented modeling utilities, including:
