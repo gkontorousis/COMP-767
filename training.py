@@ -403,6 +403,15 @@ TRAIN_DATA = build_train_data(
     seed=42,
 )
 
+# Quick manual sanity check of generated training data format.
+print(f"TRAIN_DATA size: {len(TRAIN_DATA)}")
+if TRAIN_DATA:
+    sample_sequence, sample_rule = TRAIN_DATA[0]
+    print(f"TRAIN_DATA sample types: sequence={type(sample_sequence).__name__}, rule={type(sample_rule).__name__}")
+    print(f"TRAIN_DATA sample: sequence={sample_sequence}, rule={sample_rule}")
+
+
+
 # =========================
 # Assumes you already have these from your earlier code:
 # - load_model_and_tokenizer
