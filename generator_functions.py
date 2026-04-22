@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
 from typing import Callable, Iterable, Iterator
 
@@ -217,61 +216,27 @@ DEFAULT_RULE_SPECS: tuple[RuleGeneratorSpec, ...] = (
     RuleGeneratorSpec("odd_even_squares", odd_even_squares, "odd positions: (2n)^2, even positions: 2n"),
     RuleGeneratorSpec("hard_v1", hard_v1, "piecewise quadratic by index modulo 3"),
     RuleGeneratorSpec("look_and_say", look_and_say, "look-and-say sequence"),
-    # comment this one out as it results in ungodly large sequences (in terms of tokens) and led to OOM errors even with 80GB VRAM
-    # RuleGeneratorSpec("very_hard_v1", very_hard_v1, "2n + look-and-say(n)"),
+    RuleGeneratorSpec("very_hard_v1", very_hard_v1, "2n + look-and-say(n)"),
 )
-
-
-def _take_window(generator_factory: Callable[[], Iterator[int]], start_index: int, length: int) -> list[int]:
-    if start_index < 0:
-        raise ValueError(f"start_index must be >= 0, got {start_index}")
-    if length <= 0:
-        raise ValueError(f"length must be > 0, got {length}")
-
-    gen = generator_factory()
-    for _ in range(start_index):
-        next(gen)
-    return [next(gen) for _ in range(length)]
-
-
 def build_train_data(
-    samples_per_rule: int = 3,
     sequence_length: int = 10,
-    min_start_index: int = 0,
-    max_start_index: int = 40,
-    seed: int | None = 42,
     specs: Iterable[RuleGeneratorSpec] | None = None,
 ) -> list[tuple[list[int], str]]:
     """
     Build `(observed_sequence, gold_rule)` pairs from generator specs.
 
-    Each rule contributes `samples_per_rule` windows from different start offsets,
-    so the same underlying rule appears as multiple sequences.
+    Each rule contributes exactly one sequence: the first `sequence_length` terms.
     """
-    if samples_per_rule <= 0:
-        raise ValueError(f"samples_per_rule must be > 0, got {samples_per_rule}")
-    if max_start_index < min_start_index:
-        raise ValueError(
-            "max_start_index must be >= min_start_index, got "
-            f"{max_start_index} < {min_start_index}"
-        )
+    if sequence_length <= 0:
+        raise ValueError(f"sequence_length must be > 0, got {sequence_length}")
 
     chosen_specs = tuple(DEFAULT_RULE_SPECS if specs is None else specs)
-    rng = random.Random(seed)
-    start_candidates = list(range(min_start_index, max_start_index + 1))
 
     train_data: list[tuple[list[int], str]] = []
     for spec in chosen_specs:
-        if samples_per_rule <= len(start_candidates):
-            starts = rng.sample(start_candidates, k=samples_per_rule)
-        else:
-            starts = [rng.choice(start_candidates) for _ in range(samples_per_rule)]
-
-        for start in starts:
-            seq = _take_window(spec.generator_factory, start, sequence_length)
-            train_data.append((seq, spec.rule_text))
-
-    rng.shuffle(train_data)
+        gen = spec.generator_factory()
+        seq = [next(gen) for _ in range(sequence_length)]
+        train_data.append((seq, spec.rule_text))
     return train_data
 
 
