@@ -252,7 +252,7 @@ MDL loss is the fixed evaluator objective introduced in Section~\ref{sec:modelin
 
 \section{Experiments}
 
-All experiments were implemented in \texttt{PyTorch} using the \texttt{transformers} and \texttt{peft} libraries. We used a Qwen-7B model as the base language model, with a LoRA-adapted copy as the trainable policy and a frozen copy as the evaluator. Training and evaluation were performed in half precision (\texttt{bfloat16} when available) to reduce memory usage.
+All experiments were implemented in \texttt{PyTorch} using the \texttt{transformers} and \texttt{peft} libraries. We used \texttt{Qwen/Qwen2.5-7B-Instruct} as the base language model, with a LoRA-adapted copy as the trainable policy and a frozen copy as the evaluator. Prompts were formatted through the model's chat template with explicit system and user messages. Training and evaluation were performed in half precision (\texttt{bfloat16} when available) to reduce memory usage.
 
 \paragraph{Training setup.}
 The policy was trained with REINFORCE using the MDL reward described in Section~\ref{sec:modeling}. We used the AdamW optimizer with learning rate $5 \times 10^{-5}$ for the multi-example setting, with larger learning rates used only in short diagnostic runs. Unless otherwise noted, we used 50 training episodes, 4 sampled explanations per example, sampling temperature 1.0, maximum generation length 64 tokens, gradient clipping with norm 1.0, and MDL weight $\lambda = 0.3$.
@@ -485,10 +485,10 @@ Below we list representative number sequences from our synthetic dataset togethe
 \section{Prompt Templates}
 \label{app:prompts}
 
-In all experiments, we used a shared system instruction encouraging concise mathematical explanations whenever possible:
+In all experiments, prompts were formatted as two-message chats (a system message followed by a user message) using the tokenizer's chat template. The shared system instruction used for conditional explanation generation was:
 
 \begin{quote}
-\textbf{System:} You are a careful pattern-discovery assistant. Prefer concise, mathematical rules when possible.
+\textbf{System:} You are a careful pattern-discovery assistant. Given an observed number sequence, propose a concise natural-language rule that likely generated it. Return only the rule, with no extra commentary.
 \end{quote}
 
 We then instantiated three prompt templates corresponding to the three scoring terms used in the paper.
@@ -496,29 +496,39 @@ We then instantiated three prompt templates corresponding to the three scoring t
 \paragraph{Prior term: \texorpdfstring{$-\log p(z)$}{-log p(z)}}
 This prompt is used to evaluate the simplicity or plausibility of a candidate explanation $z$:
 \begin{quote}
-\texttt{User: Write a concise rule for a number sequence.}
+\textbf{System:} \texttt{You are a careful pattern-discovery assistant. Write a concise rule for a number sequence. Return only the rule.}
 
-\texttt{Assistant: \{z\}}
+\textbf{User:} \texttt{Write a rule to generate a number sequence.}
+
+\textbf{Assistant:} \texttt{\{z\}}
 \end{quote}
 
 \paragraph{Likelihood term: \texorpdfstring{$-\log p(x \mid z)$}{-log p(x|z)}}
 This prompt is used to evaluate how well an explanation predicts the observed sequence:
 \begin{quote}
-\texttt{User: Rule: \{z\}}
+\textbf{System:} \texttt{You are a careful sequence predictor. Given a rule, continue the number sequence implied by that rule.}
 
-\texttt{Output EXACTLY the first 10 terms as comma-separated integers.}
+\textbf{User:} \texttt{Rule:}
 
-\texttt{Assistant: \{x\}}
+\texttt{\{z\}}
+
+\texttt{Output the first 10 terms of the sequence as comma-separated integers only.}
+
+\textbf{Assistant:} \texttt{\{x\}}
 \end{quote}
 
 \paragraph{Conditional baseline: \texorpdfstring{$-\log p(z \mid x)$}{-log p(z|x)}}
 This prompt is used for standard explanation generation from the observed sequence:
 \begin{quote}
-\texttt{User: Observed sequence: 1, 1, 2, 5, 12, 27, 58, 121, 248, 503}
+\textbf{System:} \texttt{You are a careful pattern-discovery assistant. Given an observed number sequence, propose a concise natural-language rule that likely generated it. Return only the rule, with no extra commentary.}
 
-\texttt{What is the most likely rule?}
+\textbf{User:} \texttt{Observed sequence:}
 
-\texttt{Assistant: \{z\}}
+\texttt{1, 1, 2, 5, 12, 27, 58, 121, 248, 503}
+
+\texttt{What is the most likely concise rule that generated this sequence?}
+
+\textbf{Assistant:} \texttt{\{z\}}
 \end{quote}
 
 Here, $x$ denotes the observed sequence and $z$ denotes the candidate explanation.
