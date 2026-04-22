@@ -1,8 +1,0 @@
-prior: “write a python script to generate a sequence of numbers”
-likelihood: “give the output of this code {z}”
-
-science world:
-prior: "geenrate a task to test an agents science skills"
-likelihood: "solve this task {z}"
-
-something like this, ish

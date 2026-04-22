@@ -135,8 +135,8 @@ We evaluate this idea in a controlled synthetic setting based on number sequence
 
 The emergence of large language models (LLMs) has led to increasing interest in using them to generate linguistic explanations for patterns observed in data. LLMs are trained on massive amounts of data and through that emerges a knowledge about multiple different fields. Recent work has explored leveraging the world knowledge that LLMs have to analyze and explain many different kinds of data \citep{Singh2024Rethinking, Bordt2024Data, Zhao2023Explainability}. These findings motivate further research on optimizing LLMs as tools for discovering interpretable hypotheses and explanations for a multitude of scientific areas. A method to model learning and evaluation of hypotheses for observations is as a Bayesian inference over them, expressed in natural language. \citet{ellis_2342342523} treat natural language as a hypothesis space, and generate candidate explanations for observed data. The candidates are evaluated using a Bayesian prior over the possible concepts and the likelihood of the observed examples given a candidate. The posterior distribution then identifies explanations that are both an explanation of the data and are plausible under the prior based on LLMs. \citet{agarwal2026autodiscoveryopenendedscientificdiscovery} study open-ended scientific discovery employing LLM agents that given observations are utilized to propose hypotheses. These hypotheses are evaluated with Bayesian surprise to guide research into possible directions that would have meaningful results. 
 
-\paragraph{Use of prompts as latent explanations of data. }
-Linguistic explanations of data can be very valuable in improving predictive performance of models. \citet{singh-etal-2023-explaining} propose iPrompt, which searches for prompts that explain input–output relationships by iteratively generating candidate explanations and selecting those that best predict the observed data. In this framework, the candidate prompt serves as an explanation of the relationship between inputs and outputs. However, unlike our setting iPrompt focuses on explaining the mapping between inputs and outputs in supervised learning tasks, whereas our goal is to generate hypotheses that explain the structure of the observed data itself. Furthermore, iPrompt performs prompt discovery through search separately for each dataset. In contrast, our approach learns an amortized explanation policy that generates candidate explanations directly while optimizing a Minimum Description Length objective that balances explanation simplicity and predictive accuracy.
+\paragraph{Use of prompts as latent explanations of data.}
+Linguistic explanations of data can be valuable for improving predictive performance. \citet{singh-etal-2023-explaining} propose iPrompt, which searches for prompts that explain input--output relationships by iteratively generating candidate explanations and selecting those that best predict the observed data. In that framework, the candidate prompt serves as an explanation of the relationship between inputs and outputs. Our setting is related, but differs in that we focus on explaining the structure of observed number sequences rather than supervised input--output mappings. Moreover, our final implementation studies a single fixed synthetic dataset of sequence examples generated from known rules. Within this setting, we train a policy to generate candidate explanations for observed sequences and optimize them with an MDL objective that balances simplicity and predictive accuracy.
 
 \paragraph{Prompt optimization for language models.}
 The modeling of prompt as a tunable hyperparameter in LLMs is a deeply explored area.
@@ -181,11 +181,11 @@ Our goal is to learn explanations that are not only likely under a language mode
 
 \subsection{Baseline}
 
-Our baseline is a pretrained language model used without additional training. Given observed data $x$, it generates an explanation $z$ according to
+Our baseline is zero-shot explanation generation with a pretrained language model used without additional task-specific training. Given observed data $x$, it generates an explanation $z$ according to
 \begin{equation}
 p_{\text{base}}(z \mid x).
 \end{equation}
-In practice, we use greedy decoding, corresponding to standard prompting. Prompt templates are given in Appendix~\ref{app:prompts}.
+In practice, we use zero-shot greedy decoding under the conditional prompt described in Appendix~\ref{app:prompts}.
 
 To score candidate explanations under this model, we use the conditional loss
 \begin{equation}
@@ -193,6 +193,7 @@ To score candidate explanations under this model, we use the conditional loss
 =
 -\log p_{\text{base}}(z \mid x).
 \end{equation}
+
 
 \subsection{Proposed Model}
 
@@ -206,6 +207,7 @@ We evaluate explanations using a frozen evaluator model $p^*$. For a candidate e
 \log p^*(x \mid z),
 \end{equation}
 where the first term favors simpler explanations and the second favors explanations that make the data predictable.
+The choice of $\lambda$ determines how strongly the objective pushes the model toward simpler and more plausible explanations, as opposed to explanations that primarily maximize predictive fit to the observed data.
 
 \paragraph{Policy model.}
 We introduce a trainable policy $\pi_\theta(z \mid x)$, initialized from the same pretrained model as the baseline and fine-tuned using LoRA. The evaluator $p^*$ is kept fixed throughout training.
@@ -221,7 +223,10 @@ and optimize the policy with REINFORCE:
 =
 -(R(z,x)-b)\log \pi_\theta(z \mid x),
 \end{equation}
-where $b$ is a baseline used to reduce variance.
+where $b(x)$ is a variance-reduction baseline taken to be the mean reward of the sampled explanations for the current input:
+\[
+b(x)=\frac{1}{K}\sum_{k=1}^{K} R(z_k,x).
+\]
 
 \paragraph{Reported scores.}
 We report three quantities throughout the paper:
@@ -236,11 +241,11 @@ The goal of training is to increase the probability of explanations that achieve
 \section{Dataset and Evaluation}
 \subsection{Data}
 
-Our original proposal considered natural-language datasets such as ScienceWorld and related task-trace settings. In practice, however, we found it difficult to identify a dataset that simultaneously satisfied three requirements: (i) the data should admit a compact underlying rule, (ii) that rule should be expressible as a short explanation, and (iii) explanation quality should be easy to verify. We therefore focus on a controlled synthetic dataset of number sequences generated by hand-designed Python functions.
+Our original proposal considered natural-language datasets such as ScienceWorld \citep{wang-etal-2022-scienceworld} and related task-trace settings. In practice, however, we found it difficult to identify a dataset that simultaneously satisfied three requirements: (i) the data should admit a compact underlying rule, (ii) that rule should be expressible as a short explanation, and (iii) explanation quality should be easy to verify. We therefore focus on a controlled synthetic dataset of number sequences generated by hand-designed Python functions.
 
-Each example consists of an observed sequence $x$ together with an intended target explanation $z$ describing the generating rule. The dataset contains multiple families of sequences, including simple closed-form rules, recurrence-based patterns, and more irregular handcrafted generators. Full examples are provided in Appendix~\ref{app:sequences}.
+The dataset is constructed directly from a fixed library of 20 generator functions. For each generator, we take exactly one example: the first 10 terms produced by that rule. As a result, the dataset contains 20 sequence--rule pairs in total, with one sequence per rule. Each example consists of an observed sequence $x$ together with a target explanation $z$ describing the generating rule.
 
-Each sequence contains 10 observed terms. Because the dataset is synthetic, the main object of interest is not a class label but the generating rule itself. This setting allows us to test whether the model recovers the intended rule rather than merely producing a plausible explanation.
+The generator library includes simple closed-form rules, recurrence-based patterns, digit-manipulation rules, and more irregular handcrafted constructions. Because the dataset is synthetic, the main object of interest is not a class label but the generating rule itself. This setting allows us to test whether the model recovers the intended rule rather than merely producing a plausible explanation. Full examples are provided in Appendix~\ref{app:sequences}.
 
 \subsection{Evaluation Metrics}
 
@@ -255,7 +260,7 @@ MDL loss is the fixed evaluator objective introduced in Section~\ref{sec:modelin
 All experiments were implemented in \texttt{PyTorch} using the \texttt{transformers} and \texttt{peft} libraries. We used \texttt{Qwen/Qwen2.5-7B-Instruct} as the base language model, with a LoRA-adapted copy as the trainable policy and a frozen copy as the evaluator. Prompts were formatted through the model's chat template with explicit system and user messages. Training and evaluation were performed in half precision (\texttt{bfloat16} when available) to reduce memory usage.
 
 \paragraph{Training setup.}
-The policy was trained with REINFORCE using the MDL reward described in Section~\ref{sec:modeling}. We used the AdamW optimizer with learning rate $5 \times 10^{-5}$ for the multi-example setting, with larger learning rates used only in short diagnostic runs. Unless otherwise noted, we used 50 training episodes, 4 sampled explanations per example, sampling temperature 1.0, maximum generation length 64 tokens, gradient clipping with norm 1.0, and MDL weight $\lambda = 0.3$.
+The policy was trained with REINFORCE using the MDL reward described in Section~\ref{sec:modeling}. We used the AdamW optimizer with learning rate $5 \times 10^{-5}$ for the multi-sequence setting, with larger learning rates used only in short diagnostic runs. Unless otherwise noted, we used 50 training episodes, 4 sampled explanations per example, sampling temperature 1.0, maximum generation length 64 tokens, gradient clipping with norm 1.0, and MDL weight $\lambda = 0.3$.
 
 The overall training pipeline is illustrated in Figure~\ref{fig:training_pipeline}.
 
@@ -268,7 +273,7 @@ The overall training pipeline is illustrated in Figure~\ref{fig:training_pipelin
 
 
 \paragraph{Exploration.}
-A key practical issue was exploration: correct explanations often had very low probability under the initial policy. To address this, we used an oracle-injection ablation in which the ground-truth explanation was inserted with small probability during training. In our synthetic multi-example experiments, we used an injection probability of 0.25. This was not intended as the final method, but as a diagnostic to test whether the policy could reinforce correct explanations once they were observed.
+A key practical issue was exploration: correct explanations often had very low probability under the initial policy. To address this, we used an oracle-injection ablation in which the ground-truth explanation was inserted with small probability during training. In our synthetic multi-sequence experiments, we used an injection probability of 0.25. This was not intended as the final method, but as a diagnostic to test whether the policy could reinforce correct explanations once they were observed.
 
 \paragraph{Evaluation protocol.}
 At evaluation time, explanations were generated with greedy decoding unless otherwise stated. We report three scores: conditional loss under the base model, conditional loss under the fine-tuned model, and MDL loss under the frozen evaluator. For consistency, all MDL numbers were computed with the same frozen evaluator and the same value of $\lambda$. In all reported experiments, we used $\lambda = 0.3$. Empirically, larger values placed too much weight on explanation simplicity and tended to favor overly simple rules, while smaller values reduced the influence of the prior and made overfitting more likely.
